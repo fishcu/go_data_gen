@@ -1,22 +1,24 @@
 #include "go_data_gen/board.hpp"
 
+#include <iomanip>
+#include <iostream>
 #include <random>
 
 #include "go_data_gen/types.hpp"
 
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
     (n_coord) = Vec2{coord.x - 1, coord.y};     \
-    (func);                                     \
+    func;                                       \
     (n_coord) = Vec2{coord.x + 1, coord.y};     \
-    (func);                                     \
+    func;                                       \
     (n_coord) = Vec2{coord.x, coord.y - 1};     \
-    (func);                                     \
+    func;                                       \
     (n_coord) = Vec2{coord.x, coord.y + 1};     \
-    (func);
+    func;
 
 namespace {
 
-uint64_t zobrist_hashes[Board::max_size * Board::max_size * 3];
+uint64_t zobrist_hashes[go_data_gen::Board::max_size * go_data_gen::Board::max_size * 3];
 
 void init_zobrist() {
     static bool initialized = false;
@@ -32,17 +34,18 @@ void init_zobrist() {
     }
 }
 
-uint64_t mem_coord_color_to_zobrist(Vec2 mem_coord, Color color) {
-    --move.coord.x;
-    --move.coord.y;
-    return zobrist_hashes[int(color) + (move.coord.x + move.coord.y * Board::max_size) * 3];
+uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Color color) {
+    --mem_coord.x;
+    --mem_coord.y;
+    return zobrist_hashes[int(color) +
+                          (mem_coord.x + mem_coord.y * go_data_gen::Board::max_size) * 3];
 }
 
 }  // namespace
 
 namespace go_data_gen {
 
-class Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
+Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
     assert(size.x <= Board::max_size && size.y <= Board::max_size && "Maximum size exceeded");
 
     reset();
@@ -78,7 +81,7 @@ bool Board::is_legal(Move move) {
 
     // Simulate playing stone
     const auto opp_col = opposite(move.color);
-    auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(mem_coord, move.color);
+    auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(move.coord, move.color);
 
     Vec2 neighbor;
 
@@ -88,7 +91,7 @@ bool Board::is_legal(Move move) {
     std::set<Vec2> captures;
     bool adds_any_liberties = false;
     FOR_EACH_NEIGHBOR(
-        mem_coord, neighbor,
+        move.coord, neighbor,
         if (board[neighbor.x][neighbor.y] == Empty) {
             adds_any_liberties = true;
         } else if (board[neighbor.x][neighbor.y] == opp_col) {
@@ -113,7 +116,7 @@ bool Board::is_legal(Move move) {
     // Must not be suicide
     if (captures.empty() && !adds_any_liberties) {
         FOR_EACH_NEIGHBOR(
-            mem_coord, neighbor, if (board[neighbor.x][neighbor.y] == move.color) {
+            move.coord, neighbor, if (board[neighbor.x][neighbor.y] == move.color) {
                 neighbor = find(neighbor);
                 if (liberties[neighbor.x][neighbor.y].size() == 1) {
                     return false;
@@ -136,7 +139,7 @@ void Board::play(Move move) {
     // Initialize new group
     board[move.coord.x][move.coord.y] = move.color;
     group[move.coord.x][move.coord.y].clear();
-    group[move.coord.x][move.coord.y].push_back(mem_coord);
+    group[move.coord.x][move.coord.y].push_back(move.coord);
     liberties[move.coord.x][move.coord.y].clear();
 
     Vec2 neighbor, root, root2;
@@ -144,42 +147,39 @@ void Board::play(Move move) {
     // Add liberties, connect to own groups, and figure out captured groups
     std::set<Vec2> captures;
     FOR_EACH_NEIGHBOR(
-        mem_coord, neighbor, switch (board[neighbor.x][neighbor.y]) {
-            case Empty:
-                root = find(mem_coord);
-                liberties[root.x][root.y].insert(neighbor);
-                break;
-            case move.color:
-                root = find(neighbor);
-                liberties[root.x][root.y].erase(mem_coord);
-                union(mem_coord, neighbor);
-                break;
-            case opp_color:
-                root = find(neighbor);
-                if (liberties[root.x][root.y].size == 1) {
-                    // Group is captured
-                    for (auto stone : group[root.x][root.y]) {
-                        board[stone.x][stone.y] = Empty;
-                        zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
-                        // Nested macros, now we're entering the danger zone
-                        FOR_EACH_NEIGHBOR(
-                            stone, neighbor,
-                            root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
-                            liberties[root2.x][root2.y].insert(stone);)
-                        // We don't need to maintain other data structures here.
-                    }
-                } else {
-                    liberties[root.x][root.y].erase(mem_coord);
+        move.coord, neighbor,
+        if (board[neighbor.x][neighbor.y] == Empty) {
+            root = find(move.coord);
+            liberties[root.x][root.y].insert(neighbor);
+        } else if (board[neighbor.x][neighbor.y] == move.color) {
+            root = find(neighbor);
+            liberties[root.x][root.y].erase(move.coord);
+            unite(move.coord, neighbor);
+        } else if (board[neighbor.x][neighbor.y] == opp_col) {
+            root = find(neighbor);
+            if (liberties[root.x][root.y].size() == 1) {
+                // Group is captured
+                for (auto stone : group[root.x][root.y]) {
+                    board[stone.x][stone.y] = Empty;
+                    zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
+                    // Nested macros, now we're entering the danger zone
+                    FOR_EACH_NEIGHBOR(
+                        stone, neighbor,
+                        root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
+                        liberties[root2.x][root2.y].insert(stone);)
+                    // We don't need to maintain other data structures here.
                 }
-                break;
+            } else {
+                liberties[root.x][root.y].erase(move.coord);
+            }
         })
 
     // Update zobrist hash
-    zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
+    zobrist ^= mem_coord_color_to_zobrist(move.coord, move.color);
     zobrist_history.insert(zobrist);
 }
 
-void print() {
+void Board::print() const {
     // Print column labels
     std::cout << "   ";
     for (int col = 0; col < size.x; ++col) {
@@ -220,7 +220,7 @@ Vec2 Board::find(Vec2 coord) {
     return coord;
 }
 
-void Board::union(Vec2 a, Vec2 b) {
+void Board::unite(Vec2 a, Vec2 b) {
     a = find(a);
     b = find(b);
     if (a == b) {

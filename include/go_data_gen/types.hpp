@@ -1,4 +1,7 @@
+#pragma once
+
 #include <cassert>
+#include <utility>
 
 namespace go_data_gen {
 
@@ -9,7 +12,7 @@ enum Color {
     OffBoard = 3,
 };
 
-inline opposite(Color c) {
+inline Color opposite(Color c) {
     assert(c == Black || c == White);
     return c == Black ? White : Black;
 }
@@ -17,6 +20,14 @@ inline opposite(Color c) {
 struct Vec2 {
     int x, y;
     bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
+    bool operator!=(const Vec2& other) const { return !(operator==(other)); }
+    bool operator<(const Vec2& other) const {
+        if (x < other.x)
+            return true;
+        if (x > other.x)
+            return false;
+        return y < other.y;
+    }
 };
 
 struct Move {

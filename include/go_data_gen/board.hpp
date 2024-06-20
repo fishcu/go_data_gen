@@ -21,7 +21,7 @@ public:
     bool is_legal(Move move);
     void play(Move move);
 
-    void print();
+    void print() const;
 
 private:
     char board[max_size + 2][max_size + 2];
@@ -34,7 +34,7 @@ private:
     std::set<Vec2> liberties[max_size + 2][max_size + 2];
 
     Vec2 find(Vec2 coord);
-    void union(Vec2 a, Vec2 b);
+    void unite(Vec2 a, Vec2 b);
 
     uint64_t zobrist;
     std::set<uint64_t> zobrist_history;
