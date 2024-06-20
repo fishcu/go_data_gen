@@ -5,8 +5,8 @@
 #include <regex>
 #include <sstream>
 
-#include "go_data_gen/types.hpp"
 #include "go_data_gen/board.hpp"
+#include "go_data_gen/types.hpp"
 
 namespace go_data_gen {
 
@@ -22,7 +22,8 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     const bool size_found = std::regex_search(content, size_match, size_regex);
     assert(size_found && "Size not found in the SGF file");
     const int size_x = std::stoi(size_match[1]);
-    const int size_y = size_match.size() > 2 && size_match[2].matched ? std::stoi(size_match[2]) : size_x;
+    const int size_y =
+        size_match.size() > 2 && size_match[2].matched ? std::stoi(size_match[2]) : size_x;
     assert(size_x <= Board::max_size && size_y <= Board::max_size && "Maximum size exceeded");
 
     // Extract komi

@@ -1,3 +1,5 @@
+#include <cassert>
+
 namespace go_data_gen {
 
 enum Color {
@@ -7,11 +9,14 @@ enum Color {
     OffBoard = 3,
 };
 
+inline opposite(Color c) {
+    assert(c == Black || c == White);
+    return c == Black ? White : Black;
+}
+
 struct Vec2 {
     int x, y;
-    bool operator==(const Vec2& other) const {
-        return x == other.x && y == other.y;
-    }
+    bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
 };
 
 struct Move {

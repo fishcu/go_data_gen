@@ -18,7 +18,10 @@ public:
     ~Board() = default;
 
     void reset();
+    bool is_legal(Move move);
     void play(Move move);
+
+    void print();
 
 private:
     char board[max_size + 2][max_size + 2];
@@ -26,12 +29,15 @@ private:
 
     float komi;
 
+    Vec2 parent[max_size + 2][max_size + 2];
+    std::vector<Vec2> group[max_size + 2][max_size + 2];
+    std::set<Vec2> liberties[max_size + 2][max_size + 2];
+
     Vec2 find(Vec2 coord);
     void union(Vec2 a, Vec2 b);
-    Vec2 parent[max_size + 2][max_size + 2];
-    int size[max_size + 2][max_size + 2];
 
-    std::set<Vec2> liberties[max_size + 2][max_size + 2];
+    uint64_t zobrist;
+    std::set<uint64_t> zobrist_history;
 };
 
 }  // namespace go_data_gen
