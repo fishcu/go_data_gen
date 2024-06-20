@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+build/
+dist/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+
+.vscode
