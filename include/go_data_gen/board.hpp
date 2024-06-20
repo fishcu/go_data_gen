@@ -21,7 +21,7 @@ public:
     bool is_legal(Move move);
     void play(Move move);
 
-    void print() const;
+    void print();
 
 private:
     char board[max_size + 2][max_size + 2];

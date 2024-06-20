@@ -55,9 +55,9 @@ Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
 void Board::reset() {
     for (int i = 0; i < max_size + 2; ++i) {
         for (int j = 0; j < max_size + 2; ++j) {
-            board[i][j] = char(Empty);
-            if (i == 0 || j == 0 || i == size.x || j == size.y) {
-                board[i][j] = OffBoard;
+            board[i][j] = char(OffBoard);
+            if (i > 0 && j > 0 && i <= size.x && j <= size.y) {
+                board[i][j] = Empty;
             }
 
             parent[i][j] = Vec2{i, j};
@@ -66,10 +66,14 @@ void Board::reset() {
         }
     }
     zobrist = 0;
-    zobrist_history = std::set<uint64_t>();
+    zobrist_history = std::set<uint64_t>{zobrist};
 }
 
 bool Board::is_legal(Move move) {
+    if (move == pass) {
+        return true;
+    }
+
     // Shift by 1 to accommodate border stored in data fields
     ++move.coord.x;
     ++move.coord.y;
@@ -83,21 +87,25 @@ bool Board::is_legal(Move move) {
     const auto opp_col = opposite(move.color);
     auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(move.coord, move.color);
 
-    Vec2 neighbor;
+    Vec2 neighbor, root;
 
-    // Figure out captured groups
+    // Figure out liberties and captured groups
     // We need to do it in two passes to avoid simulating a removal of the same group multiple times
     // with even parity, which would cancel out the zobrist hash changes.
+    std::set<Vec2> added_liberties;
     std::set<Vec2> captures;
-    bool adds_any_liberties = false;
     FOR_EACH_NEIGHBOR(
         move.coord, neighbor,
         if (board[neighbor.x][neighbor.y] == Empty) {
-            adds_any_liberties = true;
+            added_liberties.insert(neighbor);
+        } else if (board[neighbor.x][neighbor.y] == move.color) {
+            root = find(neighbor);
+            added_liberties.insert(liberties[root.x][root.y].begin(),
+                                   liberties[root.x][root.y].end());
         } else if (board[neighbor.x][neighbor.y] == opp_col) {
-            neighbor = find(neighbor);
-            if (liberties[neighbor.x][neighbor.y].size() == 1) {
-                captures.insert(neighbor);
+            root = find(neighbor);
+            if (liberties[root.x][root.y].size() == 1) {
+                captures.insert(root);
             }
         })
 
@@ -114,14 +122,12 @@ bool Board::is_legal(Move move) {
     }
 
     // Must not be suicide
-    if (captures.empty() && !adds_any_liberties) {
-        FOR_EACH_NEIGHBOR(
-            move.coord, neighbor, if (board[neighbor.x][neighbor.y] == move.color) {
-                neighbor = find(neighbor);
-                if (liberties[neighbor.x][neighbor.y].size() == 1) {
-                    return false;
-                }
-            })
+    if (captures.empty()) {
+        // Account for this move stealing last liberty of neighboring group without adding any
+        added_liberties.erase(move.coord);
+        if (added_liberties.empty()) {
+            return false;
+        }
     }
 
     return true;
@@ -129,6 +135,10 @@ bool Board::is_legal(Move move) {
 
 void Board::play(Move move) {
     assert(is_legal(move));
+
+    if (move == pass) {
+        return;
+    }
 
     // Shift by 1 to accommodate border stored in data fields
     ++move.coord.x;
@@ -168,6 +178,11 @@ void Board::play(Move move) {
                         root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
                         liberties[root2.x][root2.y].insert(stone);)
                     // We don't need to maintain other data structures here.
+                    // For debugging, clean up anyway.
+                    // parent[stone.x][stone.y].x = stone.x;
+                    // parent[stone.x][stone.y].y = stone.y;
+                    // group[stone.x][stone.y].clear();
+                    // liberties[stone.x][stone.y].clear();
                 }
             } else {
                 liberties[root.x][root.y].erase(move.coord);
@@ -179,11 +194,11 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
-void Board::print() const {
+void Board::print() {
     // Print column labels
     std::cout << "   ";
     for (int col = 0; col < size.x; ++col) {
-        std::cout << static_cast<char>('A' + col) << " ";
+        std::cout << static_cast<char>(col < 8 ? 'A' + col : 'B' + col) << " ";
     }
     std::cout << std::endl;
 
@@ -195,7 +210,7 @@ void Board::print() const {
         // Print board cells
         for (int col = 0; col < size.x; ++col) {
             // Shift by 1 to accommodate border
-            switch (board[row + 1][col + 1]) {
+            switch (board[col + 1][row + 1]) {
             case Empty:
                 std::cout << ". ";
                 break;
@@ -206,6 +221,22 @@ void Board::print() const {
                 std::cout << "O ";
                 break;
             }
+            /*
+            Vec2 root = find({col + 1, row + 1});
+            if (group[root.x][root.y].size() > 0) {
+                std::cout << std::setw(2) << group[root.x][root.y].size() << " ";
+            } else {
+                std::cout << "   ";
+            }
+            */
+            /*
+            Vec2 root = find({col + 1, row + 1});
+            if (liberties[root.x][root.y].size() > 0) {
+                std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
+            } else {
+                std::cout << "   ";
+            }
+            */
         }
         std::cout << std::endl;
     }

@@ -33,6 +33,9 @@ struct Vec2 {
 struct Move {
     Color color;
     Vec2 coord;
+    bool operator==(const Move& other) const {
+        return color == other.color && coord == other.coord;
+    }
 };
 
 constexpr Move pass{OffBoard, {-1, -1}};

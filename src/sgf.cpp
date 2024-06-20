@@ -4,6 +4,7 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 
 #include "go_data_gen/board.hpp"
 #include "go_data_gen/types.hpp"
@@ -12,6 +13,10 @@ namespace go_data_gen {
 
 void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves) {
     std::ifstream file(file_path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open the file: " + file_path);
+    }
+
     std::stringstream buffer;
     buffer << file.rdbuf();
     const std::string content = buffer.str();
@@ -36,6 +41,7 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     board = Board(Vec2{size_x, size_y}, komi);
 
     // Extract moves
+    // Doesn't handle branches!!
     const std::regex move_regex(R"([BW]\[([a-z]{2})?\])");
     std::sregex_iterator move_iter(content.begin(), content.end(), move_regex);
     const std::sregex_iterator move_end;

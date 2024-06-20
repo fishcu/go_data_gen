@@ -3,3 +3,5 @@ project(go_data_gen)
 
 add_subdirectory(src)
 # add_subdirectory(python)
+
+add_subdirectory(examples)
