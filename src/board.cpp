@@ -7,13 +7,13 @@
 #include "go_data_gen/types.hpp"
 
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
-    (n_coord) = Vec2{coord.x - 1, coord.y};     \
+    (n_coord) = {coord.x - 1, coord.y};         \
     func;                                       \
-    (n_coord) = Vec2{coord.x + 1, coord.y};     \
+    (n_coord) = {coord.x + 1, coord.y};         \
     func;                                       \
-    (n_coord) = Vec2{coord.x, coord.y - 1};     \
+    (n_coord) = {coord.x, coord.y - 1};         \
     func;                                       \
-    (n_coord) = Vec2{coord.x, coord.y + 1};     \
+    (n_coord) = {coord.x, coord.y + 1};         \
     func;
 
 namespace {
@@ -48,8 +48,8 @@ namespace go_data_gen {
 Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
     assert(size.x <= Board::max_size && size.y <= Board::max_size && "Maximum size exceeded");
 
-    reset();
     init_zobrist();
+    reset();
 }
 
 void Board::reset() {
@@ -60,11 +60,12 @@ void Board::reset() {
                 board[i][j] = Empty;
             }
 
-            parent[i][j] = Vec2{i, j};
+            parent[i][j] = {i, j};
             group[i][j].clear();
             liberties[i][j].clear();
         }
     }
+    history.clear();
     zobrist = 0;
     zobrist_history = std::set<uint64_t>{zobrist};
 }
@@ -136,6 +137,8 @@ bool Board::is_legal(Move move) {
 void Board::play(Move move) {
     assert(is_legal(move));
 
+    history.push_back(move);
+
     if (move == pass) {
         return;
     }
@@ -203,6 +206,7 @@ void Board::print(PrintMode mode) {
     std::cout << std::endl;
 
     Vec2 root;
+    Vec2 lastMove = history.back().coord;
 
     // Print board rows
     for (int row = 0; row < size.y; ++row) {
@@ -216,13 +220,21 @@ void Board::print(PrintMode mode) {
                 // Shift by 1 to accommodate border
                 switch (board[col + 1][row + 1]) {
                 case Empty:
-                    std::cout << ". ";
+                    std::cout << "\033[48;5;94m\033[38;5;0m. \033[0m";
                     break;
                 case Black:
-                    std::cout << "X ";
+                    if (col == lastMove.x && row == lastMove.y) {
+                        std::cout << "\033[48;5;208m\033[38;5;0m● \033[0m";
+                    } else {
+                        std::cout << "\033[48;5;94m\033[38;5;0m● \033[0m";
+                    }
                     break;
                 case White:
-                    std::cout << "O ";
+                    if (col == lastMove.x && row == lastMove.y) {
+                        std::cout << "\033[48;5;208m\033[38;5;15m● \033[0m";
+                    } else {
+                        std::cout << "\033[48;5;94m\033[38;5;15m● \033[0m";
+                    }
                     break;
                 }
                 break;

@@ -36,6 +36,8 @@ private:
 
     float komi;
 
+    std::vector<Move> history;
+
     Vec2 parent[max_size + 2][max_size + 2];
     std::vector<Vec2> group[max_size + 2][max_size + 2];
     std::set<Vec2> liberties[max_size + 2][max_size + 2];
