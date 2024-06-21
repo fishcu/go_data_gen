@@ -27,12 +27,13 @@ int main(int argc, char* argv[]) {
         std::cout << "Move no. " << i++ << ":\n";
         board.print();
         std::cout << std::endl;
-        if (move.color == Black || move.color == White) {
-            std::cout << "Illegal moves for " << (opposite(move.color) == Black ? "Black" : "White")
-                      << ":\n";
-            board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
-                                                      : Board::PrintMode::IllegalMovesWhite);
-        }
+        // if (move.color == Black || move.color == White) {
+        //     std::cout << "Illegal moves for " << (opposite(move.color) == Black ? "Black" :
+        //     "White")
+        //               << ":\n";
+        //     board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
+        //                                               : Board::PrintMode::IllegalMovesWhite);
+        // }
     }
 
     std::cout << "Result: ";

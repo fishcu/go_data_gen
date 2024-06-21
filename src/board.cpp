@@ -23,7 +23,6 @@ uint64_t zobrist_hashes[go_data_gen::Board::max_size * go_data_gen::Board::max_s
 void init_zobrist() {
     static bool initialized = false;
     if (!initialized) {
-        // Random number generator
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint64_t> dis(0, std::numeric_limits<uint64_t>::max());
@@ -35,8 +34,8 @@ void init_zobrist() {
 }
 
 uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Color color) {
-    --mem_coord.x;
-    --mem_coord.y;
+    mem_coord.x -= go_data_gen::Board::padding;
+    mem_coord.y -= go_data_gen::Board::padding;
     return zobrist_hashes[int(color) +
                           (mem_coord.x + mem_coord.y * go_data_gen::Board::max_size) * 3];
 }
@@ -53,8 +52,8 @@ Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
 }
 
 void Board::reset() {
-    for (int i = 0; i < max_size + 2; ++i) {
-        for (int j = 0; j < max_size + 2; ++j) {
+    for (int i = 0; i < max_size + 2 * padding; ++i) {
+        for (int j = 0; j < max_size + 2 * padding; ++j) {
             board[i][j] = char(OffBoard);
             if (i > 0 && j > 0 && i <= size.x && j <= size.y) {
                 board[i][j] = Empty;
@@ -75,11 +74,11 @@ bool Board::is_legal(Move move) {
         return true;
     }
 
-    // Shift by 1 to accommodate border stored in data fields
-    ++move.coord.x;
-    ++move.coord.y;
+    // Shift to accommodate border stored in data fields
+    move.coord.x += go_data_gen::Board::padding;
+    move.coord.y += go_data_gen::Board::padding;
 
-    // Coordinate must be empty
+    // Board must be empty
     if (board[move.coord.x][move.coord.y] != Empty) {
         return false;
     }
@@ -143,9 +142,9 @@ void Board::play(Move move) {
         return;
     }
 
-    // Shift by 1 to accommodate border stored in data fields
-    ++move.coord.x;
-    ++move.coord.y;
+    // Shift to accommodate border stored in data fields
+    move.coord.x += go_data_gen::Board::padding;
+    move.coord.y += go_data_gen::Board::padding;
 
     const auto opp_col = opposite(move.color);
 
@@ -198,7 +197,6 @@ void Board::play(Move move) {
 }
 
 void Board::print(PrintMode mode) {
-    // Print column labels
     std::cout << "   ";
     for (int col = 0; col < size.x; ++col) {
         std::cout << static_cast<char>(col < 8 ? 'A' + col : 'B' + col) << " ";
@@ -208,17 +206,14 @@ void Board::print(PrintMode mode) {
     Vec2 root;
     Vec2 lastMove = history.back().coord;
 
-    // Print board rows
     for (int row = 0; row < size.y; ++row) {
-        // Print row label
         std::cout << std::setw(2) << (size.y - row) << " ";
 
-        // Print board cells
         for (int col = 0; col < size.x; ++col) {
             switch (mode) {
             case Default:
-                // Shift by 1 to accommodate border
-                switch (board[col + 1][row + 1]) {
+                // Shift  to accommodate border
+                switch (board[col + padding][row + padding]) {
                 case Empty:
                     std::cout << "\033[48;5;94m\033[38;5;0m. \033[0m";
                     break;
@@ -239,7 +234,7 @@ void Board::print(PrintMode mode) {
                 }
                 break;
             case GroupSize:
-                root = find({col + 1, row + 1});
+                root = find({col + padding, row + padding});
                 if (group[root.x][root.y].size() > 0) {
                     std::cout << std::setw(2) << group[root.x][root.y].size() << " ";
                 } else {
@@ -247,7 +242,7 @@ void Board::print(PrintMode mode) {
                 }
                 break;
             case Liberties:
-                root = find({col + 1, row + 1});
+                root = find({col + padding, row + padding});
                 if (liberties[root.x][root.y].size() > 0) {
                     std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
                 } else {
@@ -257,7 +252,7 @@ void Board::print(PrintMode mode) {
             case IllegalMovesBlack:
             case IllegalMovesWhite:
                 const Move move = {mode == IllegalMovesBlack ? Black : White, {col, row}};
-                if (board[col + 1][row + 1] == Empty && !is_legal(move)) {
+                if (board[col + padding][row + padding] == Empty && !is_legal(move)) {
                     std::cout << "0 ";
                 } else {
                     std::cout << ". ";
