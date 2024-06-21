@@ -7,6 +7,10 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools import find_packages
 
+# Ensure the build directory exists
+if not os.path.exists('build'):
+    os.makedirs('build')
+
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
         super().__init__(name, sources=[])
