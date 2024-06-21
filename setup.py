@@ -1,5 +1,3 @@
-# python/setup.py
-
 import os
 import re
 import sys
