@@ -1,3 +1,4 @@
+#define PYBIND11_DETAILED_ERROR_MESSAGES
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -9,10 +10,6 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
-
-    // Bind free function
-    m.def("load_sgf", &go_data_gen::load_sgf, "Load SGF file into board and move history",
-          py::arg("file_path"), py::arg("board"), py::arg("moves"), py::arg("result"));
 
     // Bind Color enum
     py::enum_<go_data_gen::Color>(m, "Color")
@@ -33,6 +30,14 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def_readwrite("color", &go_data_gen::Move::color)
         .def_readwrite("coord", &go_data_gen::Move::coord);
 
+    // Bind PrintMode enum
+    py::enum_<go_data_gen::Board::PrintMode>(m, "PrintMode")
+        .value("Default", go_data_gen::Board::Default)
+        .value("GroupSize", go_data_gen::Board::GroupSize)
+        .value("Liberties", go_data_gen::Board::Liberties)
+        .value("IllegalMovesBlack", go_data_gen::Board::IllegalMovesBlack)
+        .value("IllegalMovesWhite", go_data_gen::Board::IllegalMovesWhite);
+
     // Bind Board class
     py::class_<go_data_gen::Board>(m, "Board")
         .def(py::init<go_data_gen::Vec2, float>())
@@ -40,4 +45,8 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)
         .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default);
+
+    // Bind free function
+    m.def("load_sgf", &go_data_gen::load_sgf, "Load SGF file into board and move history",
+          py::arg("file_path"), py::arg("board"), py::arg("moves"), py::arg("result"));
 }
