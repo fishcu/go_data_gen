@@ -218,10 +218,27 @@ void Board::print(PrintMode mode) {
         for (int col = 0; col < size.x; ++col) {
             switch (mode) {
             case Default:
-                // Shift  to accommodate border
+                // Shift to accommodate border
                 switch (board[col + padding][row + padding]) {
                 case Empty:
-                    std::cout << "\033[48;5;94m\033[38;5;0m. \033[0m";
+                    if (col == 0 && row == 0)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┌─\033[0m";
+                    else if (col == size.x - 1 && row == 0)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┐ \033[0m";
+                    else if (col == 0 && row == size.y - 1)
+                        std::cout << "\033[48;5;94m\033[38;5;0m└─\033[0m";
+                    else if (col == size.x - 1 && row == size.y - 1)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┘ \033[0m";
+                    else if (col == 0)
+                        std::cout << "\033[48;5;94m\033[38;5;0m├─\033[0m";
+                    else if (col == size.x - 1)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┤ \033[0m";
+                    else if (row == 0)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┬─\033[0m";
+                    else if (row == size.y - 1)
+                        std::cout << "\033[48;5;94m\033[38;5;0m┴─\033[0m";
+                    else
+                        std::cout << "\033[48;5;94m\033[38;5;0m┼─\033[0m";
                     break;
                 case Black:
                     if (col == lastMove.x && row == lastMove.y) {
