@@ -169,16 +169,21 @@ void Board::play(Move move) {
             unite(move.coord, neighbor);
         } else if (board[neighbor.x][neighbor.y] == opp_col) {
             root = find(neighbor);
-            if (liberties[root.x][root.y].size() == 1) {
+            liberties[root.x][root.y].erase(move.coord);
+            if (liberties[root.x][root.y].size() == 0) {
                 // Group is captured
                 for (auto stone : group[root.x][root.y]) {
                     board[stone.x][stone.y] = Empty;
                     zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
                     // Nested macros, now we're entering the danger zone
                     FOR_EACH_NEIGHBOR(
-                        stone, neighbor,
-                        root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
-                        liberties[root2.x][root2.y].insert(stone);)
+                        stone, neighbor, if (board[neighbor.x][neighbor.y] == move.color) {
+                            // The opposite of the opposite of the move color is the move color.
+                            // Capturing a group of the opposite color frees liberties for the move
+                            // color.
+                            root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
+                            liberties[root2.x][root2.y].insert(stone);
+                        })
                     // We don't need to maintain other data structures here.
                     // For debugging, clean up anyway.
                     // parent[stone.x][stone.y].x = stone.x;
@@ -186,8 +191,6 @@ void Board::play(Move move) {
                     // group[stone.x][stone.y].clear();
                     // liberties[stone.x][stone.y].clear();
                 }
-            } else {
-                liberties[root.x][root.y].erase(move.coord);
             }
         })
 
@@ -199,6 +202,9 @@ void Board::play(Move move) {
 void Board::print(PrintMode mode) {
     std::cout << "   ";
     for (int col = 0; col < size.x; ++col) {
+        if (mode == Liberties) {
+            std::cout << " ";
+        }
         std::cout << static_cast<char>(col < 8 ? 'A' + col : 'B' + col) << " ";
     }
     std::cout << std::endl;
@@ -246,7 +252,7 @@ void Board::print(PrintMode mode) {
                 if (liberties[root.x][root.y].size() > 0) {
                     std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
                 } else {
-                    std::cout << "   ";
+                    std::cout << " . ";
                 }
                 break;
             case IllegalMovesBlack:

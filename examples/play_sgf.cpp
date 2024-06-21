@@ -34,6 +34,8 @@ int main(int argc, char* argv[]) {
         //     board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
         //                                               : Board::PrintMode::IllegalMovesWhite);
         // }
+        // printf("Liberty size: \n");
+        // board.print(Board::PrintMode::Liberties);
     }
 
     std::cout << "Result: ";
