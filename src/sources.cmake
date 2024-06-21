@@ -1,0 +1,4 @@
+set(GDG_SOURCES
+  ${CMAKE_CURRENT_LIST_DIR}/board.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/sgf.cpp
+)

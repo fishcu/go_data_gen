@@ -1,7 +1,14 @@
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
+CPMAddPackage(
+  NAME pybind11
+  GITHUB_REPOSITORY pybind/pybind11
+  VERSION 2.12.0
+)
 
-pybind11_add_module(gdg_bindings bindings.cpp)
-target_link_libraries(gdg_bindings PRIVATE go_data_gen)
+pybind11_add_module(go_data_gen_python 
+    bindings.cpp
+    ${GDG_SOURCES}
+)
 
-install(TARGETS gdg_bindings DESTINATION .)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../src/sources.cmake)
+target_link_libraries(go_data_gen_python PRIVATE go_data_gen)
+target_include_directories(go_data_gen_python PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
