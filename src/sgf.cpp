@@ -11,7 +11,7 @@
 
 namespace go_data_gen {
 
-void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves) {
+void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves, float& result) {
     std::ifstream file(file_path);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open the file: " + file_path);
@@ -76,6 +76,26 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
         }
 
         ++move_iter;
+    }
+
+    // Extract result
+    const std::regex result_regex(R"(RE\[((?:B|W)\+(?:\d+(?:\.\d+)?|R)?|0|Void)\])");
+    std::smatch result_match;
+    const bool result_found = std::regex_search(content, result_match, result_regex);
+    assert(result_found && "Result not found in the SGF file");
+
+    const std::string result_str = result_match[1].str();
+    if (result_str == "B+R") {
+        result = -1.0f;  // Black wins by resignation
+    } else if (result_str == "W+R") {
+        result = 1.0f;  // White wins by resignation
+    } else if (result_str == "0" || result_str == "Void") {
+        result = 0.0f;  // Draw or void game
+    } else {
+        // Parse score for B+<score> or W+<score>
+        const char winner = result_str[0];
+        const float score = std::stof(result_str.substr(2));
+        result = (winner == 'W' ? 1.0f : -1.0f) * score;
     }
 }
 

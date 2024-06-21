@@ -1,3 +1,4 @@
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -16,8 +17,9 @@ int main(int argc, char* argv[]) {
     std::string file_path = argv[1];
     Board board;
     std::vector<Move> moves;
+    float result;
 
-    load_sgf(file_path, board, moves);
+    load_sgf(file_path, board, moves, result);
 
     int i = 1;
     for (const auto& move : moves) {
@@ -25,6 +27,15 @@ int main(int argc, char* argv[]) {
         std::cout << "Move no. " << i++ << ":\n";
         board.print();
         std::cout << std::endl;
+    }
+
+    std::cout << "Result: ";
+    if (result < 0) {
+        std::cout << "B+" << std::setprecision(1) << std::fixed << -result << std::endl;
+    } else if (result > 0) {
+        std::cout << "W+" << std::setprecision(1) << std::fixed << result << std::endl;
+    } else {
+        std::cout << "0" << std::endl;
     }
 
     return 0;
