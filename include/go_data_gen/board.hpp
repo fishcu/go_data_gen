@@ -21,7 +21,14 @@ public:
     bool is_legal(Move move);
     void play(Move move);
 
-    void print();
+    enum PrintMode {
+        Default = 0,
+        GroupSize,
+        Liberties,
+        IllegalMovesBlack,
+        IllegalMovesWhite,
+    };
+    void print(PrintMode mode = Default);
 
 private:
     char board[max_size + 2][max_size + 2];

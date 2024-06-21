@@ -194,13 +194,15 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
-void Board::print() {
+void Board::print(PrintMode mode) {
     // Print column labels
     std::cout << "   ";
     for (int col = 0; col < size.x; ++col) {
         std::cout << static_cast<char>(col < 8 ? 'A' + col : 'B' + col) << " ";
     }
     std::cout << std::endl;
+
+    Vec2 root;
 
     // Print board rows
     for (int row = 0; row < size.y; ++row) {
@@ -209,34 +211,47 @@ void Board::print() {
 
         // Print board cells
         for (int col = 0; col < size.x; ++col) {
-            // Shift by 1 to accommodate border
-            switch (board[col + 1][row + 1]) {
-            case Empty:
-                std::cout << ". ";
+            switch (mode) {
+            case Default:
+                // Shift by 1 to accommodate border
+                switch (board[col + 1][row + 1]) {
+                case Empty:
+                    std::cout << ". ";
+                    break;
+                case Black:
+                    std::cout << "X ";
+                    break;
+                case White:
+                    std::cout << "O ";
+                    break;
+                }
                 break;
-            case Black:
-                std::cout << "X ";
+            case GroupSize:
+                root = find({col + 1, row + 1});
+                if (group[root.x][root.y].size() > 0) {
+                    std::cout << std::setw(2) << group[root.x][root.y].size() << " ";
+                } else {
+                    std::cout << "   ";
+                }
                 break;
-            case White:
-                std::cout << "O ";
+            case Liberties:
+                root = find({col + 1, row + 1});
+                if (liberties[root.x][root.y].size() > 0) {
+                    std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
+                } else {
+                    std::cout << "   ";
+                }
+                break;
+            case IllegalMovesBlack:
+            case IllegalMovesWhite:
+                const Move move = {mode == IllegalMovesBlack ? Black : White, {col, row}};
+                if (board[col + 1][row + 1] == Empty && !is_legal(move)) {
+                    std::cout << "0 ";
+                } else {
+                    std::cout << ". ";
+                }
                 break;
             }
-            /*
-            Vec2 root = find({col + 1, row + 1});
-            if (group[root.x][root.y].size() > 0) {
-                std::cout << std::setw(2) << group[root.x][root.y].size() << " ";
-            } else {
-                std::cout << "   ";
-            }
-            */
-            /*
-            Vec2 root = find({col + 1, row + 1});
-            if (liberties[root.x][root.y].size() > 0) {
-                std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
-            } else {
-                std::cout << "   ";
-            }
-            */
         }
         std::cout << std::endl;
     }
