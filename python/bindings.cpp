@@ -2,6 +2,8 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <torch/python.h>
+#include <torch/torch.h>
 
 #include "go_data_gen/board.hpp"
 #include "go_data_gen/sgf.hpp"
@@ -33,29 +35,6 @@ public:
         return py::make_tuple(src.x, src.y).release();
     }
 };
-
-template <>
-struct type_caster<go_data_gen::Move> {
-public:
-    PYBIND11_TYPE_CASTER(go_data_gen::Move, _("Move"));
-
-    // Conversion part 1 (Python -> C++)
-    bool load(handle src, bool) {
-        if (!py::isinstance<py::tuple>(src))
-            return false;
-        auto tuple = src.cast<py::tuple>();
-        if (tuple.size() != 2)
-            return false;
-        value.color = tuple[0].cast<go_data_gen::Color>();
-        value.coord = tuple[1].cast<go_data_gen::Vec2>();
-        return true;
-    }
-
-    // Conversion part 2 (C++ -> Python)
-    static handle cast(go_data_gen::Move src, return_value_policy, handle) {
-        return py::make_tuple(src.color, src.coord).release();
-    }
-};
 }  // namespace detail
 }  // namespace pybind11
 
@@ -68,6 +47,15 @@ PYBIND11_MODULE(go_data_gen, m) {
         .value("Black", go_data_gen::Black)
         .value("White", go_data_gen::White)
         .value("OffBoard", go_data_gen::OffBoard);
+
+    // Bind the opposite function
+    m.def("opposite", &go_data_gen::opposite, "Get the opposite color", py::arg("color"));
+
+    // Bind Vec2 struct as a tuple
+    py::class_<go_data_gen::Vec2>(m, "Vec2")
+        .def(py::init<int, int>())
+        .def_readwrite("x", &go_data_gen::Vec2::x)
+        .def_readwrite("y", &go_data_gen::Vec2::y);
 
     // Bind Move struct
     py::class_<go_data_gen::Move>(m, "Move")
@@ -83,14 +71,21 @@ PYBIND11_MODULE(go_data_gen, m) {
         .value("IllegalMovesBlack", go_data_gen::Board::IllegalMovesBlack)
         .value("IllegalMovesWhite", go_data_gen::Board::IllegalMovesWhite);
 
-    // Bind Board class with both constructors
+    // Bind Board class
     py::class_<go_data_gen::Board>(m, "Board")
         .def(py::init<>())                          // Default constructor
         .def(py::init<go_data_gen::Vec2, float>())  // Constructor with Vec2 and float
         .def("reset", &go_data_gen::Board::reset)
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)
-        .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default);
+        .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default)
+        .def("get_komi_from_player_perspective",
+             &go_data_gen::Board::get_komi_from_player_perspective)
+        .def("get_stone_map", &go_data_gen::Board::get_stone_map)
+        .def("get_nn_input_data", [](go_data_gen::Board& self, go_data_gen::Color to_play) {
+            const auto result = self.get_nn_input_data(to_play);
+            return py::make_tuple(py::cast(std::get<0>(result)), py::cast(std::get<1>(result)));
+        });
 
     // Bind free function to return a tuple
     m.def(

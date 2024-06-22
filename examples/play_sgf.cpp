@@ -36,6 +36,32 @@ int main(int argc, char* argv[]) {
         // }
         // printf("Liberty size: \n");
         // board.print(Board::PrintMode::Liberties);
+
+        // Check after 75 moves
+        if (i == 75) {
+            auto nn_input_data = board.get_nn_input_data(opposite(move.color));
+            auto [stacked_maps, features] = nn_input_data;
+            std::cout << "NN Input Data after 75 moves:" << std::endl;
+            std::cout << "Stacked Maps:" << std::endl;
+
+            // Split the stacked maps into individual 2D maps and print them
+            for (int64_t idx = 0; idx < stacked_maps.size(0); ++idx) {
+                std::cout << "Map " << (idx + 1) << ":" << std::endl;
+                for (int64_t row = 0; row < stacked_maps.size(1); ++row) {
+                    for (int64_t col = 0; col < stacked_maps.size(2); ++col) {
+                        std::cout << std::setw(2)
+                                  << static_cast<int>(stacked_maps[idx][row][col].item<float>())
+                                  << " ";
+                    }
+                    std::cout << std::endl;
+                }
+                std::cout << std::endl;
+            }
+
+            std::cout << "Features:" << std::endl;
+            // Print the features
+            std::cout << features << std::endl << std::endl;
+        }
     }
 
     std::cout << "Result: ";

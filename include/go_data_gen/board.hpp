@@ -1,5 +1,7 @@
 #pragma once
 
+#include <torch/torch.h>
+
 #include <set>
 #include <string>
 #include <vector>
@@ -21,6 +23,15 @@ public:
     void reset();
     bool is_legal(Move move);
     void play(Move move);
+
+    float get_komi_from_player_perspective(Color to_play);
+    torch::Tensor get_stone_map(Color color);
+    // Gets all relevant NN input data in one function, calling all of the above.
+    // Returns a tuple of tensors:
+    // The first tensor contains the stacked feature maps.
+    // The second tensor is a vector of scalar features.
+    std::tuple<torch::Tensor, torch::Tensor> get_nn_input_data(Color to_play);
+
 
     enum PrintMode {
         Default = 0,

@@ -199,8 +199,42 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
+float Board::get_komi_from_player_perspective(Color to_play) {
+    return to_play == White ? komi : -komi;
+}
+
+torch::Tensor Board::get_stone_map(Color color) {
+    const auto size = max_size + 2 * padding;
+    torch::Tensor stone_map = torch::zeros({size, size}, torch::kFloat32);
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            if (board[i][j] == color) {
+                stone_map[i][j] = 1.0;
+            }
+        }
+    }
+    return stone_map;
+}
+
+std::tuple<torch::Tensor, torch::Tensor> Board::get_nn_input_data(Color to_play) {
+    torch::Tensor stone_map_black = get_stone_map(Color::Black);
+    torch::Tensor stone_map_white = get_stone_map(Color::White);
+
+    // Stack the feature maps depth-wise
+    torch::Tensor stacked_maps = torch::stack({stone_map_black, stone_map_white}, 0);
+
+    // Create a 1D tensor for the scalar features.
+    float komi_perspective = get_komi_from_player_perspective(to_play);
+    torch::Tensor features = torch::tensor({komi_perspective}, torch::kFloat32);
+
+    return std::make_tuple(stacked_maps, features);
+}
+
 void Board::print(PrintMode mode) {
     std::cout << "   ";
+    if (mode == Default) {
+        std::cout << " ";
+    }
     for (int col = 0; col < size.x; ++col) {
         if (mode == Liberties) {
             std::cout << " ";
@@ -210,10 +244,14 @@ void Board::print(PrintMode mode) {
     std::cout << std::endl;
 
     Vec2 root;
-    Vec2 lastMove = history.back().coord;
+    Vec2 last_move = history.back().coord;
 
     for (int row = 0; row < size.y; ++row) {
         std::cout << std::setw(2) << (size.y - row) << " ";
+
+        if (mode == Default) {
+            std::cout << "\033[48;5;94m \033[0m";
+        }
 
         for (int col = 0; col < size.x; ++col) {
             switch (mode) {
@@ -241,14 +279,14 @@ void Board::print(PrintMode mode) {
                         std::cout << "\033[48;5;94m\033[38;5;0m┼─\033[0m";
                     break;
                 case Black:
-                    if (col == lastMove.x && row == lastMove.y) {
+                    if (col == last_move.x && row == last_move.y) {
                         std::cout << "\033[48;5;208m\033[38;5;0m● \033[0m";
                     } else {
                         std::cout << "\033[48;5;94m\033[38;5;0m● \033[0m";
                     }
                     break;
                 case White:
-                    if (col == lastMove.x && row == lastMove.y) {
+                    if (col == last_move.x && row == last_move.y) {
                         std::cout << "\033[48;5;208m\033[38;5;15m● \033[0m";
                     } else {
                         std::cout << "\033[48;5;94m\033[38;5;15m● \033[0m";
