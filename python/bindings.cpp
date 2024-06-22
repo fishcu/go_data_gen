@@ -1,9 +1,8 @@
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 #include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <torch/python.h>
-#include <torch/torch.h>
 
 #include "go_data_gen/board.hpp"
 #include "go_data_gen/sgf.hpp"
@@ -40,8 +39,6 @@ public:
 
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
-
-    m.def("create_dummy_tensor", &create_dummy_tensor, "Create a dummy tensor");
 
     // Bind Color enum
     py::enum_<go_data_gen::Color>(m, "Color")
@@ -81,14 +78,10 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)
         .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default)
+        .def("get_stone_map", &go_data_gen::Board::get_stone_map)
         .def("get_komi_from_player_perspective",
              &go_data_gen::Board::get_komi_from_player_perspective)
-        .def("get_stone_map", &go_data_gen::Board::get_stone_map)
-        .def("get_nn_input_data", [](go_data_gen::Board& self, go_data_gen::Color to_play) {
-            auto result = self.get_nn_input_data(to_play);
-            return py::make_tuple(py::cast(std::get<0>(result), py::return_value_policy::move),
-                                  py::cast(std::get<1>(result), py::return_value_policy::move));
-        });
+        .def("get_nn_input_data", &go_data_gen::Board::get_nn_input_data);
 
     // Bind free function to return a tuple
     m.def(

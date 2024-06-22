@@ -4,11 +4,10 @@
 #include <iostream>
 #include <random>
 
+#include "go_data_gen/python_env.hpp"
 #include "go_data_gen/types.hpp"
 
-torch::Tensor create_dummy_tensor() {
-    return torch::ones({2, 3});
-}
+namespace py = pybind11;
 
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
     (n_coord) = {coord.x - 1, coord.y};         \
@@ -50,6 +49,8 @@ namespace go_data_gen {
 
 Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
     assert(size.x <= Board::max_size && size.y <= Board::max_size && "Maximum size exceeded");
+
+    PythonEnvironment::instance(); // Ensures Python is initialized
 
     init_zobrist();
     reset();
@@ -203,35 +204,48 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
-float Board::get_komi_from_player_perspective(Color to_play) {
-    return to_play == White ? komi : -komi;
-}
-
-torch::Tensor Board::get_stone_map(Color color) {
-    const auto size = max_size + 2 * padding;
-    torch::Tensor stone_map = torch::zeros({size, size}, torch::kFloat32);
+py::array_t<float> Board::get_stone_map(Color color) {
+    constexpr auto size = Board::data_size;
+    py::array_t<float> stone_map({size, size});
+    auto buf = stone_map.mutable_unchecked<2>();
     for (int i = 0; i < size; ++i) {
         for (int j = 0; j < size; ++j) {
             if (board[i][j] == color) {
-                stone_map[i][j] = 1.0;
+                buf(i, j) = 1.0;
+            } else {
+                buf(i, j) = 0.0;
             }
         }
     }
     return stone_map;
 }
 
-std::tuple<torch::Tensor, torch::Tensor> Board::get_nn_input_data(Color to_play) {
-    torch::Tensor stone_map_black = get_stone_map(Color::Black);
-    torch::Tensor stone_map_white = get_stone_map(Color::White);
+float Board::get_komi_from_player_perspective(Color to_play) {
+    return to_play == White ? komi : -komi;
+}
+
+pybind11::tuple Board::get_nn_input_data(Color to_play) {
+    const Color opp_col = opposite(to_play);
 
     // Stack the feature maps depth-wise
-    torch::Tensor stacked_maps = torch::stack({stone_map_black, stone_map_white}, 0);
+    constexpr int size = Board::data_size;
+    py::array_t<float> stacked_maps({2, size, size});
+    auto buf = stacked_maps.mutable_unchecked<3>();
+    auto stone_map_to_play = get_stone_map(to_play);
+    auto stone_map_opp_col = get_stone_map(opp_col);
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            buf(0, i, j) = stone_map_to_play.at(i, j);
+            buf(1, i, j) = stone_map_opp_col.at(i, j);
+        }
+    }
 
-    // Create a 1D tensor for the scalar features.
-    float komi_perspective = get_komi_from_player_perspective(to_play);
-    torch::Tensor features = torch::tensor({komi_perspective}, torch::kFloat32);
+    // Create a 1D array for the scalar features.
+    py::array_t<float> features({1});
+    auto feat_buf = features.mutable_unchecked<1>();
+    feat_buf(0) = get_komi_from_player_perspective(to_play);
 
-    return std::make_tuple(stacked_maps, features);
+    return py::make_tuple(stacked_maps, features);
 }
 
 void Board::print(PrintMode mode) {
