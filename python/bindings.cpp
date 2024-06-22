@@ -41,6 +41,8 @@ public:
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
 
+    m.def("create_dummy_tensor", &create_dummy_tensor, "Create a dummy tensor");
+
     // Bind Color enum
     py::enum_<go_data_gen::Color>(m, "Color")
         .value("Empty", go_data_gen::Empty)
@@ -83,8 +85,9 @@ PYBIND11_MODULE(go_data_gen, m) {
              &go_data_gen::Board::get_komi_from_player_perspective)
         .def("get_stone_map", &go_data_gen::Board::get_stone_map)
         .def("get_nn_input_data", [](go_data_gen::Board& self, go_data_gen::Color to_play) {
-            const auto result = self.get_nn_input_data(to_play);
-            return py::make_tuple(py::cast(std::get<0>(result)), py::cast(std::get<1>(result)));
+            auto result = self.get_nn_input_data(to_play);
+            return py::make_tuple(py::cast(std::get<0>(result), py::return_value_policy::move),
+                                  py::cast(std::get<1>(result), py::return_value_policy::move));
         });
 
     // Bind free function to return a tuple

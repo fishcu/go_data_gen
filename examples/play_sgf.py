@@ -26,20 +26,20 @@ def main():
         # Check after 75 moves
         if i == 75:
             nn_input_data = board.get_nn_input_data(go_data_gen.opposite(move.color))
-            stacked_maps, features = nn_input_data
-            print("NN Input Data after 75 moves:")
-            print("Stacked Maps:")
+            # stacked_maps, features = nn_input_data
+            # print("NN Input Data after 75 moves:")
+            # print("Stacked Maps:")
 
-            # Split the stacked maps into individual 2D maps and print them
-            for idx, map in enumerate(stacked_maps):
-                print(f"Map {idx + 1}:")
-                for row in map:
-                    print(" ".join(f"{int(value.item()):2d}" for value in row))
-                print()
+            # # Split the stacked maps into individual 2D maps and print them
+            # for idx, map in enumerate(stacked_maps):
+            #     print(f"Map {idx + 1}:")
+            #     for row in map:
+            #         print(" ".join(f"{int(value.item()):2d}" for value in row))
+            #     print()
 
-            print("Features:")
-            print(features)
-            print()
+            # print("Features:")
+            # print(features)
+            # print()
 
     print("Result: ", end="")
     if result < 0:

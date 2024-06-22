@@ -8,6 +8,8 @@
 
 #include "types.hpp"
 
+torch::Tensor create_dummy_tensor();
+
 namespace go_data_gen {
 
 class Board {

@@ -6,6 +6,10 @@
 
 #include "go_data_gen/types.hpp"
 
+torch::Tensor create_dummy_tensor() {
+    return torch::ones({2, 3});
+}
+
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
     (n_coord) = {coord.x - 1, coord.y};         \
     func;                                       \
