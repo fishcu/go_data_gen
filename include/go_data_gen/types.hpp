@@ -30,14 +30,15 @@ struct Vec2 {
     }
 };
 
+constexpr Vec2 pass{-1, -1};
+
 struct Move {
     Color color;
     Vec2 coord;
     bool operator==(const Move& other) const {
         return color == other.color && coord == other.coord;
     }
+    bool operator!=(const Move& other) const { return !(operator==(other)); }
 };
-
-constexpr Move pass{OffBoard, {-1, -1}};
 
 }  // namespace go_data_gen

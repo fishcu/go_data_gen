@@ -16,12 +16,13 @@ def main():
         print(f"Move no. {i}:")
         board.print()
         print()
-        # if move.color in [go_data_gen.Color.Black, go_data_gen.Color.White]:
-        #     opposite_color = go_data_gen.Color.Black if move.color == go_data_gen.Color.White else go_data_gen.Color.White
-        #     print(f"Illegal moves for {'Black' if opposite_color == go_data_gen.Color.Black else 'White'}:")
-        #     board.print(go_data_gen.PrintMode.IllegalMovesBlack if opposite_color == go_data_gen.Color.Black else go_data_gen.PrintMode.IllegalMovesWhite)
-        #     print("Liberty size:")
-        #     board.print(go_data_gen.PrintMode.Liberties)
+        print(f"Illegal moves for {'Black' if go_data_gen.opposite(
+            move.color) == go_data_gen.Color.Black else 'White'}:")
+        board.print(go_data_gen.PrintMode.IllegalMovesBlack if go_data_gen.opposite(move.color) == go_data_gen.Color.Black
+                    else go_data_gen.PrintMode.IllegalMovesWhite)
+
+        print("Liberty size:")
+        board.print(go_data_gen.PrintMode.Liberties)
 
         # Check after 75 moves
         if i == 75:
@@ -32,12 +33,20 @@ def main():
             print("Stacked Maps:")
             for idx in range(stacked_maps.shape[0]):
                 print(f"Map {idx + 1}:")
-                print(stacked_maps[idx])
+                for row in range(stacked_maps.shape[1]):
+                    for col in range(stacked_maps.shape[2]):
+                        print(
+                            f"{int(stacked_maps[idx, row, col]):2d}", end=" ")
+                    print()
                 print()
 
             print("Features:")
-            print(features)
-            print()
+            for feature in features:
+                print(feature, end=" ")
+            print("\n")
+
+        print("Feature plane 15:")
+        board.print_feature_planes(go_data_gen.opposite(move.color), 15)
 
     print("Result: ", end="")
     if result < 0:

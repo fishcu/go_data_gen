@@ -78,7 +78,7 @@ void Board::reset() {
 }
 
 bool Board::is_legal(Move move) {
-    if (move == pass) {
+    if (move.coord == pass) {
         return true;
     }
 
@@ -88,6 +88,7 @@ bool Board::is_legal(Move move) {
 
     // Board must be empty
     if (board[move.coord.x][move.coord.y] != Empty) {
+        // assert(false);
         return false;
     }
 
@@ -126,6 +127,7 @@ bool Board::is_legal(Move move) {
 
     // Must not be superko
     if (zobrist_history.find(new_zobrist) != zobrist_history.end()) {
+        // assert(false);
         return false;
     }
 
@@ -134,6 +136,7 @@ bool Board::is_legal(Move move) {
         // Account for this move stealing last liberty of neighboring group without adding any
         added_liberties.erase(move.coord);
         if (added_liberties.empty()) {
+            // assert(false);
             return false;
         }
     }
@@ -146,7 +149,7 @@ void Board::play(Move move) {
 
     history.push_back(move);
 
-    if (move == pass) {
+    if (move.coord == pass) {
         return;
     }
 
@@ -158,6 +161,7 @@ void Board::play(Move move) {
 
     // Initialize new group
     board[move.coord.x][move.coord.y] = move.color;
+    parent[move.coord.x][move.coord.y] = move.coord;
     group[move.coord.x][move.coord.y].clear();
     group[move.coord.x][move.coord.y].push_back(move.coord);
     liberties[move.coord.x][move.coord.y].clear();
@@ -233,6 +237,42 @@ py::array_t<float> Board::get_stone_map(Color color) {
     return get_map(color, [this, color](int i, int j) { return board[i][j] == color; });
 }
 
+py::array_t<float> Board::get_history_map(int dist) {
+    // dist = 0 implies the move just played
+    // dist = 1 implies the 2nd-last move played, and so on
+    if (dist >= history.size()) {
+        return get_map(OffBoard, [](int, int) { return false; });
+    }
+    // Pass is encoded just outside the board area, within the padded area.
+    const auto move = history.rbegin()[dist];
+    return get_map(OffBoard, [this, move](int i, int j) {
+        return Vec2{i - padding, j - padding} == move.coord;
+    });
+}
+
+py::array_t<float> Board::get_liberty_map(Color color, int num, bool or_greater) {
+    if (or_greater) {
+        return get_map(color, [this, color, num](int i, int j) {
+            if (board[i][j] == color) {
+                const auto root = find(Vec2{i, j});
+                if (liberties[root.x][root.y].size() >= num) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+    return get_map(color, [this, color, num](int i, int j) {
+        if (board[i][j] == color) {
+            const auto root = find(Vec2{i, j});
+            if (liberties[root.x][root.y].size() == num) {
+                return true;
+            }
+        }
+        return false;
+    });
+}
+
 float Board::get_komi_from_player_perspective(Color to_play) {
     return to_play == White ? komi : -komi;
 }
@@ -241,20 +281,50 @@ pybind11::tuple Board::get_nn_input_data(Color to_play) {
     const Color opp_col = opposite(to_play);
 
     // Stack the feature maps depth-wise
-    constexpr int size = Board::data_size;
-    py::array_t<float> stacked_maps({2, size, size});
+    py::array_t<float> stacked_maps({num_feature_planes, data_size, data_size});
     auto buf = stacked_maps.mutable_unchecked<3>();
-    auto stone_map_to_play = get_stone_map(to_play);
-    auto stone_map_opp_col = get_stone_map(opp_col);
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            buf(0, i, j) = stone_map_to_play.at(i, j);
-            buf(1, i, j) = stone_map_opp_col.at(i, j);
+
+    const auto mask = get_mask();
+    const auto legal_map = get_legal_map(to_play);
+    const auto stone_map_to_play = get_stone_map(to_play);
+    const auto stone_map_opp_col = get_stone_map(opp_col);
+    const auto hist_map_0 = get_history_map(0);
+    const auto hist_map_1 = get_history_map(1);
+    const auto hist_map_2 = get_history_map(2);
+    const auto hist_map_3 = get_history_map(3);
+    const auto hist_map_4 = get_history_map(4);
+    const auto lib_map_own_1 = get_liberty_map(to_play, 1);
+    const auto lib_map_opp_1 = get_liberty_map(opp_col, 1);
+    const auto lib_map_own_2 = get_liberty_map(to_play, 2);
+    const auto lib_map_opp_2 = get_liberty_map(opp_col, 2);
+    const auto lib_map_own_3 = get_liberty_map(to_play, 3);
+    const auto lib_map_opp_3 = get_liberty_map(opp_col, 3);
+    const auto lib_map_own_4_or_gr = get_liberty_map(to_play, 4, true);
+    const auto lib_map_opp_4_or_gr = get_liberty_map(opp_col, 4, true);
+    for (int i = 0; i < data_size; ++i) {
+        for (int j = 0; j < data_size; ++j) {
+            buf(0, i, j) = mask.at(i, j);
+            buf(1, i, j) = legal_map.at(i, j);
+            buf(2, i, j) = stone_map_to_play.at(i, j);
+            buf(3, i, j) = stone_map_opp_col.at(i, j);
+            buf(4, i, j) = hist_map_0.at(i, j);
+            buf(5, i, j) = hist_map_1.at(i, j);
+            buf(6, i, j) = hist_map_2.at(i, j);
+            buf(7, i, j) = hist_map_3.at(i, j);
+            buf(8, i, j) = hist_map_4.at(i, j);
+            buf(9, i, j) = lib_map_own_1.at(i, j);
+            buf(10, i, j) = lib_map_opp_1.at(i, j);
+            buf(11, i, j) = lib_map_own_2.at(i, j);
+            buf(12, i, j) = lib_map_opp_2.at(i, j);
+            buf(13, i, j) = lib_map_own_3.at(i, j);
+            buf(14, i, j) = lib_map_opp_3.at(i, j);
+            buf(15, i, j) = lib_map_own_4_or_gr.at(i, j);
+            buf(16, i, j) = lib_map_opp_4_or_gr.at(i, j);
         }
     }
 
     // Create a 1D array for the scalar features.
-    py::array_t<float> features({1});
+    py::array_t<float> features({num_feature_scalars});
     auto feat_buf = features.mutable_unchecked<1>();
     feat_buf(0) = get_komi_from_player_perspective(to_play);
 
@@ -350,6 +420,77 @@ void Board::print(PrintMode mode) {
                     std::cout << ". ";
                 }
                 break;
+            }
+        }
+        std::cout << std::endl;
+    }
+}
+
+void Board::print_feature_planes(Color to_play, int feature_plane_index) {
+    auto nn_input = get_nn_input_data(to_play);
+    auto feature_planes = py::cast<py::array_t<float>>(nn_input[0]);
+    auto feature_plane = feature_planes.mutable_unchecked<3>();
+
+    // Print column headers
+    std::cout << "    ";
+    for (int col = 0; col < data_size; ++col) {
+        if (col >= padding && col < padding + board_size.x) {
+            char col_label = static_cast<char>((col - padding) < 8 ? 'A' + (col - padding)
+                                                                   : 'B' + (col - padding));
+            std::cout << col_label << " ";
+        } else {
+            std::cout << "  ";
+        }
+    }
+    std::cout << std::endl;
+
+    for (int row = 0; row < data_size; ++row) {
+        if (row >= padding && row < padding + board_size.y) {
+            std::cout << std::setw(2) << (board_size.y - (row - padding)) << " ";
+        } else {
+            std::cout << "   ";
+        }
+        std::cout << " ";
+
+        for (int col = 0; col < data_size; ++col) {
+            float value = feature_plane(feature_plane_index, row, col);
+            bool on_board = (row >= padding && row < padding + board_size.y && col >= padding &&
+                             col < padding + board_size.x);
+
+            std::string bg_color = (value == 1.0f) ? "\033[48;5;14m" :  // Cyan
+                                       (on_board) ? "\033[48;5;94m"
+                                                  :     // Brown
+                                       "\033[48;5;0m";  // Black
+
+            if (on_board) {
+                Color stone = Color(board[col][row]);
+                if (stone == Empty) {
+                    if (col == padding && row == padding)
+                        std::cout << bg_color << "\033[38;5;0m┌─\033[0m";
+                    else if (col == padding + board_size.x - 1 && row == padding)
+                        std::cout << bg_color << "\033[38;5;0m┐ \033[0m";
+                    else if (col == padding && row == padding + board_size.y - 1)
+                        std::cout << bg_color << "\033[38;5;0m└─\033[0m";
+                    else if (col == padding + board_size.x - 1 && row == padding + board_size.y - 1)
+                        std::cout << bg_color << "\033[38;5;0m┘ \033[0m";
+                    else if (col == padding)
+                        std::cout << bg_color << "\033[38;5;0m├─\033[0m";
+                    else if (col == padding + board_size.x - 1)
+                        std::cout << bg_color << "\033[38;5;0m┤ \033[0m";
+                    else if (row == padding)
+                        std::cout << bg_color << "\033[38;5;0m┬─\033[0m";
+                    else if (row == padding + board_size.y - 1)
+                        std::cout << bg_color << "\033[38;5;0m┴─\033[0m";
+                    else
+                        std::cout << bg_color << "\033[38;5;0m┼─\033[0m";
+                } else if (stone == Black) {
+                    std::cout << bg_color << "\033[38;5;0m● \033[0m";
+                } else if (stone == White) {
+                    std::cout << bg_color << "\033[38;5;15m● \033[0m";
+                }
+            } else {
+                std::string fg_color = (value == 1.0f) ? "\033[38;5;0m" : "\033[38;5;15m";
+                std::cout << bg_color << fg_color << "# \033[0m";
             }
         }
         std::cout << std::endl;

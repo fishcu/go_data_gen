@@ -70,7 +70,6 @@ PYBIND11_MODULE(go_data_gen, m) {
         .value("IllegalMovesBlack", go_data_gen::Board::IllegalMovesBlack)
         .value("IllegalMovesWhite", go_data_gen::Board::IllegalMovesWhite);
 
-    // Bind Board class
     py::class_<go_data_gen::Board>(m, "Board")
         .def_readonly_static("max_board_size", &go_data_gen::Board::max_board_size)
         .def_readonly_static("padding", &go_data_gen::Board::padding)
@@ -80,11 +79,20 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("reset", &go_data_gen::Board::reset)
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)
-        .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default)
+        .def("get_mask", &go_data_gen::Board::get_mask)
+        .def("get_legal_map", &go_data_gen::Board::get_legal_map)
         .def("get_stone_map", &go_data_gen::Board::get_stone_map)
+        .def("get_history_map", &go_data_gen::Board::get_history_map)
+        .def("get_liberty_map", &go_data_gen::Board::get_liberty_map, py::arg("color"),
+             py::arg("num"), py::arg("or_greater") = false)
         .def("get_komi_from_player_perspective",
              &go_data_gen::Board::get_komi_from_player_perspective)
-        .def("get_nn_input_data", &go_data_gen::Board::get_nn_input_data);
+        .def_readonly_static("num_feature_planes", &go_data_gen::Board::num_feature_planes)
+        .def_readonly_static("num_feature_scalars", &go_data_gen::Board::num_feature_scalars)
+        .def("get_nn_input_data", &go_data_gen::Board::get_nn_input_data)
+        .def("print", &go_data_gen::Board::print, py::arg("mode") = go_data_gen::Board::Default)
+        .def("print_feature_planes", &go_data_gen::Board::print_feature_planes, py::arg("to_play"),
+             py::arg("feature_plane_index") = 0);
 
     // Bind free function to return a tuple
     m.def(

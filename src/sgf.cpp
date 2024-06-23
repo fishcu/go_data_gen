@@ -58,7 +58,7 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
                 const char row = move_match[2].str()[1] - 'a';
                 moves.push_back({color, {static_cast<int>(col), static_cast<int>(row)}});
             } else {
-                moves.push_back(pass);
+                moves.push_back({color, pass});
             }
         } else if (move_match[3].matched) {
             // Handicap stones (AB or AW)

@@ -28,16 +28,15 @@ int main(int argc, char* argv[]) {
         board.play(move);
         std::cout << "Move no. " << i++ << ":\n";
         board.print();
+
         std::cout << std::endl;
-        // if (move.color == Black || move.color == White) {
-        //     std::cout << "Illegal moves for " << (opposite(move.color) == Black ? "Black" :
-        //     "White")
-        //               << ":\n";
-        //     board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
-        //                                               : Board::PrintMode::IllegalMovesWhite);
-        // }
-        // printf("Liberty size: \n");
-        // board.print(Board::PrintMode::Liberties);
+        std::cout << "Illegal moves for " << (opposite(move.color) == Black ? "Black" : "White")
+                  << ":\n";
+        board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
+                                                  : Board::PrintMode::IllegalMovesWhite);
+
+        printf("Liberty size: \n");
+        board.print(Board::PrintMode::Liberties);
 
         // Check after 75 moves
         if (i == 75) {
@@ -70,6 +69,9 @@ int main(int argc, char* argv[]) {
             }
             std::cout << std::endl << std::endl;
         }
+
+        printf("Feature plane 15:\n");
+        board.print_feature_planes(opposite(move.color), 15);
     }
 
     std::cout << "Result: ";

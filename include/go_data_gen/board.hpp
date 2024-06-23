@@ -31,11 +31,17 @@ public:
     pybind11::array_t<float> get_mask();
     pybind11::array_t<float> get_legal_map(Color color);
     pybind11::array_t<float> get_stone_map(Color color);
+    pybind11::array_t<float> get_history_map(int dist);
+    pybind11::array_t<float> get_liberty_map(Color color, int num, bool or_greater = false);
+
     float get_komi_from_player_perspective(Color to_play);
+
     // Gets all relevant NN input data in one function, calling all of the above.
     // Returns a tuple of tensors:
     // The first tensor contains the stacked feature maps.
     // The second tensor is a vector of scalar features.
+    static constexpr int num_feature_planes = 17;
+    static constexpr int num_feature_scalars = 1;
     pybind11::tuple get_nn_input_data(Color to_play);
 
     enum PrintMode {
@@ -46,6 +52,8 @@ public:
         IllegalMovesWhite,
     };
     void print(PrintMode mode = Default);
+
+    void print_feature_planes(Color to_play, int feature_plane_index = 0);
 
 private:
     char board[data_size][data_size];
