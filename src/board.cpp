@@ -207,20 +207,30 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
-py::array_t<float> Board::get_stone_map(Color color) {
-    py::array_t<float> stone_map({Board::data_size, Board::data_size});
-    auto buf = stone_map.mutable_unchecked<2>();
+py::array_t<float> Board::get_map(Color color, std::function<bool(int, int)> condition) {
+    py::array_t<float> map({Board::data_size, Board::data_size});
+    auto buf = map.mutable_unchecked<2>();
     for (int i = 0; i < Board::data_size; ++i) {
         for (int j = 0; j < Board::data_size; ++j) {
             // Board uses column-major ordering, numpy uses row-major by default.
-            if (board[j][i] == color) {
-                buf(i, j) = 1.0;
-            } else {
-                buf(i, j) = 0.0;
-            }
+            buf(i, j) = condition(j, i) ? 1.0 : 0.0;
         }
     }
-    return stone_map;
+    return map;
+}
+
+py::array_t<float> Board::get_mask() {
+    return get_map(OffBoard, [this](int i, int j) { return board[i][j] != OffBoard; });
+}
+
+py::array_t<float> Board::get_legal_map(Color color) {
+    return get_map(color, [this, color](int i, int j) {
+        return is_legal({color, {i - padding, j - padding}});
+    });
+}
+
+py::array_t<float> Board::get_stone_map(Color color) {
+    return get_map(color, [this, color](int i, int j) { return board[i][j] == color; });
 }
 
 float Board::get_komi_from_player_perspective(Color to_play) {

@@ -4,15 +4,6 @@
 
 This repository provides a C++ library with Python bindings for generating data for the game of Go. The library includes functionality for loading SGF files, manipulating Go boards, and generating input data for training NNs.
 
-## Prerequisites
-
-### PyTorch
-Build libtorch from source.
-Install it to a certain directory of your choice, then point `find_package(Torch)` in the root CMakeLists.txt to it with the PATH parameter.
-
-### Other dependencies
-Other dependencies should be downloaded and built during the build process automatically.
-
 ## Building the C++ Library
 
 CMake-based build:

@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -27,6 +28,8 @@ public:
     bool is_legal(Move move);
     void play(Move move);
 
+    pybind11::array_t<float> get_mask();
+    pybind11::array_t<float> get_legal_map(Color color);
     pybind11::array_t<float> get_stone_map(Color color);
     float get_komi_from_player_perspective(Color to_play);
     // Gets all relevant NN input data in one function, calling all of the above.
@@ -61,6 +64,9 @@ private:
 
     uint64_t zobrist;
     std::set<uint64_t> zobrist_history;
+
+    // Common function for all get_*_map functions
+    pybind11::array_t<float> get_map(Color color, std::function<bool(int, int)> condition);
 };
 
 }  // namespace go_data_gen
