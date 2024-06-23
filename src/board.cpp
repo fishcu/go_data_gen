@@ -345,7 +345,7 @@ void Board::print(PrintMode mode) {
     std::cout << std::endl;
 
     Vec2 root;
-    Vec2 last_move = history.back().coord;
+    Vec2 last_move_coord = history.empty() ? pass : history.back().coord;
 
     for (int row = 0; row < board_size.y; ++row) {
         std::cout << std::setw(2) << (board_size.y - row) << " ";
@@ -380,14 +380,14 @@ void Board::print(PrintMode mode) {
                         std::cout << "\033[48;5;94m\033[38;5;0m┼─\033[0m";
                     break;
                 case Black:
-                    if (col == last_move.x && row == last_move.y) {
+                    if (col == last_move_coord.x && row == last_move_coord.y) {
                         std::cout << "\033[48;5;208m\033[38;5;0m● \033[0m";
                     } else {
                         std::cout << "\033[48;5;94m\033[38;5;0m● \033[0m";
                     }
                     break;
                 case White:
-                    if (col == last_move.x && row == last_move.y) {
+                    if (col == last_move_coord.x && row == last_move_coord.y) {
                         std::cout << "\033[48;5;208m\033[38;5;15m● \033[0m";
                     } else {
                         std::cout << "\033[48;5;94m\033[38;5;15m● \033[0m";

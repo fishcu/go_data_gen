@@ -50,11 +50,9 @@ PYBIND11_MODULE(go_data_gen, m) {
     // Bind the opposite function
     m.def("opposite", &go_data_gen::opposite, "Get the opposite color", py::arg("color"));
 
-    // Bind Vec2 struct as a tuple
-    py::class_<go_data_gen::Vec2>(m, "Vec2")
-        .def(py::init<int, int>())
-        .def_readwrite("x", &go_data_gen::Vec2::x)
-        .def_readwrite("y", &go_data_gen::Vec2::y);
+    // Since Vec2 is exposed as a tuple, specify what the pass coordinate is.
+    // Gotta use a different name than "pass" because that is a reserved keyword in Python.
+    m.attr("pass_coord") = py::make_tuple(-1, -1);
 
     // Bind Move struct
     py::class_<go_data_gen::Move>(m, "Move")
