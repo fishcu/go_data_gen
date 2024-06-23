@@ -14,12 +14,12 @@ namespace go_data_gen {
 
 class Board {
 public:
-    static constexpr int max_size = 19;
+    static constexpr int max_board_size = 19;
     static constexpr int padding = 1;
-    static constexpr int data_size = max_size + 2 * padding;
+    static constexpr int data_size = max_board_size + 2 * padding;
 
     Board() = default;
-    Board(Vec2 size, float komi);
+    Board(Vec2 board_size, float komi);
 
     ~Board() = default;
 
@@ -46,7 +46,7 @@ public:
 
 private:
     char board[data_size][data_size];
-    Vec2 size;
+    Vec2 board_size;
 
     float komi;
 

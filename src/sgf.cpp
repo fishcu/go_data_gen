@@ -29,7 +29,8 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     const int size_x = std::stoi(size_match[1]);
     const int size_y =
         size_match.size() > 2 && size_match[2].matched ? std::stoi(size_match[2]) : size_x;
-    assert(size_x <= Board::max_size && size_y <= Board::max_size && "Maximum size exceeded");
+    assert(size_x <= Board::max_board_size && size_y <= Board::max_board_size &&
+           "Maximum size exceeded");
 
     // Extract komi
     const std::regex komi_regex(R"(KM\[(-?\d+(?:\.\d+)?)\])");

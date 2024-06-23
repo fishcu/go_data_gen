@@ -72,8 +72,11 @@ PYBIND11_MODULE(go_data_gen, m) {
 
     // Bind Board class
     py::class_<go_data_gen::Board>(m, "Board")
-        .def(py::init<>())                          // Default constructor
-        .def(py::init<go_data_gen::Vec2, float>())  // Constructor with Vec2 and float
+        .def_readonly_static("max_board_size", &go_data_gen::Board::max_board_size)
+        .def_readonly_static("padding", &go_data_gen::Board::padding)
+        .def_readonly_static("data_size", &go_data_gen::Board::data_size)
+        .def(py::init<>())
+        .def(py::init<go_data_gen::Vec2, float>())
         .def("reset", &go_data_gen::Board::reset)
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)

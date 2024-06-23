@@ -21,7 +21,8 @@ namespace py = pybind11;
 
 namespace {
 
-uint64_t zobrist_hashes[go_data_gen::Board::max_size * go_data_gen::Board::max_size * 3];
+uint64_t
+    zobrist_hashes[go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 3];
 
 void init_zobrist() {
     static bool initialized = false;
@@ -40,27 +41,29 @@ uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Co
     mem_coord.x -= go_data_gen::Board::padding;
     mem_coord.y -= go_data_gen::Board::padding;
     return zobrist_hashes[int(color) +
-                          (mem_coord.x + mem_coord.y * go_data_gen::Board::max_size) * 3];
+                          (mem_coord.x + mem_coord.y * go_data_gen::Board::max_board_size) * 3];
 }
 
 }  // namespace
 
 namespace go_data_gen {
 
-Board::Board(Vec2 _size, float _komi) : size{_size}, komi{_komi} {
-    assert(size.x <= Board::max_size && size.y <= Board::max_size && "Maximum size exceeded");
+Board::Board(Vec2 _board_size, float _komi) : board_size{_board_size}, komi{_komi} {
+    assert(board_size.x <= max_board_size && board_size.y <= max_board_size &&
+           "Maximum size exceeded");
 
-    PythonEnvironment::instance(); // Ensures Python is initialized
+    PythonEnvironment::instance();  // Ensures Python is initialized
 
     init_zobrist();
     reset();
 }
 
 void Board::reset() {
-    for (int i = 0; i < max_size + 2 * padding; ++i) {
-        for (int j = 0; j < max_size + 2 * padding; ++j) {
+    for (int i = 0; i < data_size; ++i) {
+        for (int j = 0; j < data_size; ++j) {
             board[i][j] = char(OffBoard);
-            if (i > 0 && j > 0 && i <= size.x && j <= size.y) {
+            if (i >= padding && j >= padding && i < padding + board_size.x &&
+                j < padding + board_size.y) {
                 board[i][j] = Empty;
             }
 
@@ -80,8 +83,8 @@ bool Board::is_legal(Move move) {
     }
 
     // Shift to accommodate border stored in data fields
-    move.coord.x += go_data_gen::Board::padding;
-    move.coord.y += go_data_gen::Board::padding;
+    move.coord.x += padding;
+    move.coord.y += padding;
 
     // Board must be empty
     if (board[move.coord.x][move.coord.y] != Empty) {
@@ -148,8 +151,8 @@ void Board::play(Move move) {
     }
 
     // Shift to accommodate border stored in data fields
-    move.coord.x += go_data_gen::Board::padding;
-    move.coord.y += go_data_gen::Board::padding;
+    move.coord.x += padding;
+    move.coord.y += padding;
 
     const auto opp_col = opposite(move.color);
 
@@ -205,12 +208,12 @@ void Board::play(Move move) {
 }
 
 py::array_t<float> Board::get_stone_map(Color color) {
-    constexpr auto size = Board::data_size;
-    py::array_t<float> stone_map({size, size});
+    py::array_t<float> stone_map({Board::data_size, Board::data_size});
     auto buf = stone_map.mutable_unchecked<2>();
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            if (board[i][j] == color) {
+    for (int i = 0; i < Board::data_size; ++i) {
+        for (int j = 0; j < Board::data_size; ++j) {
+            // Board uses column-major ordering, numpy uses row-major by default.
+            if (board[j][i] == color) {
                 buf(i, j) = 1.0;
             } else {
                 buf(i, j) = 0.0;
@@ -253,7 +256,7 @@ void Board::print(PrintMode mode) {
     if (mode == Default) {
         std::cout << " ";
     }
-    for (int col = 0; col < size.x; ++col) {
+    for (int col = 0; col < board_size.x; ++col) {
         if (mode == Liberties) {
             std::cout << " ";
         }
@@ -264,14 +267,14 @@ void Board::print(PrintMode mode) {
     Vec2 root;
     Vec2 last_move = history.back().coord;
 
-    for (int row = 0; row < size.y; ++row) {
-        std::cout << std::setw(2) << (size.y - row) << " ";
+    for (int row = 0; row < board_size.y; ++row) {
+        std::cout << std::setw(2) << (board_size.y - row) << " ";
 
         if (mode == Default) {
             std::cout << "\033[48;5;94m \033[0m";
         }
 
-        for (int col = 0; col < size.x; ++col) {
+        for (int col = 0; col < board_size.x; ++col) {
             switch (mode) {
             case Default:
                 // Shift to accommodate border
@@ -279,19 +282,19 @@ void Board::print(PrintMode mode) {
                 case Empty:
                     if (col == 0 && row == 0)
                         std::cout << "\033[48;5;94m\033[38;5;0m┌─\033[0m";
-                    else if (col == size.x - 1 && row == 0)
+                    else if (col == board_size.x - 1 && row == 0)
                         std::cout << "\033[48;5;94m\033[38;5;0m┐ \033[0m";
-                    else if (col == 0 && row == size.y - 1)
+                    else if (col == 0 && row == board_size.y - 1)
                         std::cout << "\033[48;5;94m\033[38;5;0m└─\033[0m";
-                    else if (col == size.x - 1 && row == size.y - 1)
+                    else if (col == board_size.x - 1 && row == board_size.y - 1)
                         std::cout << "\033[48;5;94m\033[38;5;0m┘ \033[0m";
                     else if (col == 0)
                         std::cout << "\033[48;5;94m\033[38;5;0m├─\033[0m";
-                    else if (col == size.x - 1)
+                    else if (col == board_size.x - 1)
                         std::cout << "\033[48;5;94m\033[38;5;0m┤ \033[0m";
                     else if (row == 0)
                         std::cout << "\033[48;5;94m\033[38;5;0m┬─\033[0m";
-                    else if (row == size.y - 1)
+                    else if (row == board_size.y - 1)
                         std::cout << "\033[48;5;94m\033[38;5;0m┴─\033[0m";
                     else
                         std::cout << "\033[48;5;94m\033[38;5;0m┼─\033[0m";
