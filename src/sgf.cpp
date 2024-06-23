@@ -4,7 +4,6 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
-#include <stdexcept>
 
 #include "go_data_gen/board.hpp"
 #include "go_data_gen/types.hpp"
@@ -41,39 +40,66 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
 
     board = Board(Vec2{size_x, size_y}, komi);
 
-    // Extract moves and handicap stones
-    // Doesn't handle branches!!
-    const std::regex move_regex(R"(([BW])\[([a-z]{2})?\]|A([BW])(\[[a-z]{2}\])+)");
-    const std::regex coord_regex(R"(\[([a-z]{2})\])");
-    std::sregex_iterator move_iter(content.begin(), content.end(), move_regex);
     const std::sregex_iterator end;
+
+    // Handle setup and handicap moves
+    const std::regex setup_regex(R"(A([BWE])(\[[a-z]{2}\])+)");
+    std::sregex_iterator setup_iter(content.begin(), content.end(), setup_regex);
+    const std::regex coord_regex(R"(\[([a-z]{2})\])");
+    while (setup_iter != end) {
+        const std::smatch setup_match = *setup_iter;
+        const char setup_type = setup_match[1].str()[0];
+        const std::string coords_str = setup_match[0].str();
+
+        std::sregex_iterator coord_iter(coords_str.begin(), coords_str.end(), coord_regex);
+
+        while (coord_iter != end) {
+            const std::smatch coord_match = *coord_iter;
+            const int col = static_cast<int>(coord_match[1].str()[0] - 'a');
+            const int row = static_cast<int>(coord_match[1].str()[1] - 'a');
+
+            if (setup_type == 'B') {
+                board.setup_move({Black, {col, row}});
+            } else if (setup_type == 'W') {
+                board.setup_move({White, {col, row}});
+            } else if (setup_type == 'E') {
+                board.setup_move({Empty, {col, row}});
+            }
+
+            ++coord_iter;
+        }
+
+        ++setup_iter;
+    }
+
+    // Extract moves
+    // Doesn't handle branches!!
+    const std::regex move_regex(R"(([BW])\[([a-z]{2})?\])");
+    std::sregex_iterator move_iter(content.begin(), content.end(), move_regex);
     while (move_iter != end) {
         const std::smatch move_match = *move_iter;
 
-        if (move_match[1].matched) {
-            // Regular move
-            const Color color = move_match[1].str()[0] == 'B' ? Black : White;
-            if (move_match[2].matched) {
-                const char col = move_match[2].str()[0] - 'a';
-                const char row = move_match[2].str()[1] - 'a';
-                moves.push_back({color, {static_cast<int>(col), static_cast<int>(row)}});
-            } else {
-                moves.push_back({color, pass});
-            }
-        } else if (move_match[3].matched) {
-            // Handicap stones (AB or AW)
-            const Color color = move_match[3].str()[0] == 'B' ? Black : White;
-            const std::string coords_str = move_match[0].str();
+        // Explictly need to skip false AB and AW matches since C++ regex doesn't support negative
+        // lookbehind assertions
+        std::string move_context;
+        if (move_match.position() >= 1) {
+            move_context = content.substr(move_match.position() - 1, 2);
+        } else {
+            move_context = "";  // No valid context if we're at the start of the string
+        }
+        if (move_context == "AB" || move_context == "AW" || move_context == "AE") {
+            ++move_iter;
+            continue;
+        }
 
-            std::sregex_iterator coord_iter(coords_str.begin(), coords_str.end(), coord_regex);
+        const Color color = move_match[1].str()[0] == 'B' ? Black : White;
 
-            while (coord_iter != end) {
-                const std::smatch coord_match = *coord_iter;
-                const char col = coord_match[1].str()[0] - 'a';
-                const char row = coord_match[1].str()[1] - 'a';
-                moves.push_back({color, {static_cast<int>(col), static_cast<int>(row)}});
-                ++coord_iter;
-            }
+        if (move_match[2].matched) {
+            const int col = static_cast<int>(move_match[2].str()[0] - 'a');
+            const int row = static_cast<int>(move_match[2].str()[1] - 'a');
+            moves.push_back({color, {col, row}});
+        } else {
+            moves.push_back({color, pass});
         }
 
         ++move_iter;

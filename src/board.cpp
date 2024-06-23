@@ -1,6 +1,5 @@
 #include "go_data_gen/board.hpp"
 
-#include <iomanip>
 #include <iostream>
 #include <random>
 
@@ -75,6 +74,53 @@ void Board::reset() {
     history.clear();
     zobrist = 0;
     zobrist_history = std::set<uint64_t>{zobrist};
+}
+
+void Board::setup_move(Move move) {
+    if (move.coord == pass) {
+        return;
+    }
+
+    // Shift to accommodate border stored in data fields
+    move.coord.x += padding;
+    move.coord.y += padding;
+
+    board[move.coord.x][move.coord.y] = move.color;
+
+    if (move.color == Black || move.color == White) {
+        // Initialize new group
+        parent[move.coord.x][move.coord.y] = move.coord;
+        group[move.coord.x][move.coord.y].clear();
+        group[move.coord.x][move.coord.y].push_back(move.coord);
+        liberties[move.coord.x][move.coord.y].clear();
+    }
+
+    Vec2 neighbor, root, root2;
+
+    // Update liberties and connect groups
+    FOR_EACH_NEIGHBOR(
+        move.coord, neighbor,
+        if (move.color == Empty) {
+            if (board[neighbor.x][neighbor.y] == Black || board[neighbor.x][neighbor.y] == White) {
+                root = find(neighbor);
+                liberties[root.x][root.y].insert(move.coord);
+            }
+        } else {
+            const auto opp_col = opposite(move.color);
+            if (board[neighbor.x][neighbor.y] == Empty) {
+                root = find(move.coord);
+                liberties[root.x][root.y].insert(neighbor);
+            } else if (board[neighbor.x][neighbor.y] == move.color) {
+                root = find(neighbor);
+                liberties[root.x][root.y].erase(move.coord);
+                unite(move.coord, neighbor);
+            } else if (board[neighbor.x][neighbor.y] == opp_col) {
+                root = find(neighbor);
+                liberties[root.x][root.y].erase(move.coord);
+            }
+        }
+
+    )
 }
 
 bool Board::is_legal(Move move) {
@@ -159,8 +205,9 @@ void Board::play(Move move) {
 
     const auto opp_col = opposite(move.color);
 
-    // Initialize new group
     board[move.coord.x][move.coord.y] = move.color;
+
+    // Initialize new group
     parent[move.coord.x][move.coord.y] = move.coord;
     group[move.coord.x][move.coord.y].clear();
     group[move.coord.x][move.coord.y].push_back(move.coord);
@@ -169,7 +216,6 @@ void Board::play(Move move) {
     Vec2 neighbor, root, root2;
 
     // Add liberties, connect to own groups, and figure out captured groups
-    std::set<Vec2> captures;
     FOR_EACH_NEIGHBOR(
         move.coord, neighbor,
         if (board[neighbor.x][neighbor.y] == Empty) {
@@ -332,26 +378,26 @@ pybind11::tuple Board::get_nn_input_data(Color to_play) {
 }
 
 void Board::print(PrintMode mode) {
-    std::cout << "   ";
+    printf("   ");
     if (mode == Default) {
-        std::cout << " ";
+        printf(" ");
     }
     for (int col = 0; col < board_size.x; ++col) {
         if (mode == Liberties) {
-            std::cout << " ";
+            printf(" ");
         }
-        std::cout << static_cast<char>(col < 8 ? 'A' + col : 'B' + col) << " ";
+        printf("%c ", static_cast<char>(col < 8 ? 'A' + col : 'B' + col));
     }
-    std::cout << std::endl;
+    printf("\n");
 
     Vec2 root;
     Vec2 last_move_coord = history.empty() ? pass : history.back().coord;
 
     for (int row = 0; row < board_size.y; ++row) {
-        std::cout << std::setw(2) << (board_size.y - row) << " ";
+        printf("%2d ", board_size.y - row);
 
         if (mode == Default) {
-            std::cout << "\033[48;5;94m \033[0m";
+            printf("\033[48;5;94m \033[0m");
         }
 
         for (int col = 0; col < board_size.x; ++col) {
@@ -361,36 +407,36 @@ void Board::print(PrintMode mode) {
                 switch (board[col + padding][row + padding]) {
                 case Empty:
                     if (col == 0 && row == 0)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┌─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┌─\033[0m");
                     else if (col == board_size.x - 1 && row == 0)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┐ \033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┐ \033[0m");
                     else if (col == 0 && row == board_size.y - 1)
-                        std::cout << "\033[48;5;94m\033[38;5;0m└─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m└─\033[0m");
                     else if (col == board_size.x - 1 && row == board_size.y - 1)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┘ \033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┘ \033[0m");
                     else if (col == 0)
-                        std::cout << "\033[48;5;94m\033[38;5;0m├─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m├─\033[0m");
                     else if (col == board_size.x - 1)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┤ \033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┤ \033[0m");
                     else if (row == 0)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┬─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┬─\033[0m");
                     else if (row == board_size.y - 1)
-                        std::cout << "\033[48;5;94m\033[38;5;0m┴─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┴─\033[0m");
                     else
-                        std::cout << "\033[48;5;94m\033[38;5;0m┼─\033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m┼─\033[0m");
                     break;
                 case Black:
                     if (col == last_move_coord.x && row == last_move_coord.y) {
-                        std::cout << "\033[48;5;208m\033[38;5;0m● \033[0m";
+                        printf("\033[48;5;208m\033[38;5;0m● \033[0m");
                     } else {
-                        std::cout << "\033[48;5;94m\033[38;5;0m● \033[0m";
+                        printf("\033[48;5;94m\033[38;5;0m● \033[0m");
                     }
                     break;
                 case White:
                     if (col == last_move_coord.x && row == last_move_coord.y) {
-                        std::cout << "\033[48;5;208m\033[38;5;15m● \033[0m";
+                        printf("\033[48;5;208m\033[38;5;15m● \033[0m");
                     } else {
-                        std::cout << "\033[48;5;94m\033[38;5;15m● \033[0m";
+                        printf("\033[48;5;94m\033[38;5;15m● \033[0m");
                     }
                     break;
                 }
@@ -398,31 +444,31 @@ void Board::print(PrintMode mode) {
             case GroupSize:
                 root = find({col + padding, row + padding});
                 if (group[root.x][root.y].size() > 0) {
-                    std::cout << std::setw(2) << group[root.x][root.y].size() << " ";
+                    printf("%2ld ", group[root.x][root.y].size());
                 } else {
-                    std::cout << "   ";
+                    printf("   ");
                 }
                 break;
             case Liberties:
                 root = find({col + padding, row + padding});
                 if (liberties[root.x][root.y].size() > 0) {
-                    std::cout << std::setw(2) << liberties[root.x][root.y].size() << " ";
+                    printf("%2ld ", liberties[root.x][root.y].size());
                 } else {
-                    std::cout << " . ";
+                    printf(" . ");
                 }
                 break;
             case IllegalMovesBlack:
             case IllegalMovesWhite:
                 const Move move = {mode == IllegalMovesBlack ? Black : White, {col, row}};
                 if (board[col + padding][row + padding] == Empty && !is_legal(move)) {
-                    std::cout << "0 ";
+                    printf("0 ");
                 } else {
-                    std::cout << ". ";
+                    printf(". ");
                 }
                 break;
             }
         }
-        std::cout << std::endl;
+        printf("\n");
     }
 }
 
@@ -432,32 +478,31 @@ void Board::print_feature_planes(Color to_play, int feature_plane_index) {
     auto feature_plane = feature_planes.mutable_unchecked<3>();
 
     // Print column headers
-    std::cout << "    ";
+    printf("    ");
     for (int col = 0; col < data_size; ++col) {
         if (col >= padding && col < padding + board_size.x) {
             char col_label = static_cast<char>((col - padding) < 8 ? 'A' + (col - padding)
                                                                    : 'B' + (col - padding));
-            std::cout << col_label << " ";
+            printf("%c ", col_label);
         } else {
-            std::cout << "  ";
+            printf("  ");
         }
     }
-    std::cout << std::endl;
+    printf("\n");
 
     for (int row = 0; row < data_size; ++row) {
         if (row >= padding && row < padding + board_size.y) {
-            std::cout << std::setw(2) << (board_size.y - (row - padding)) << " ";
+            printf("%2d  ", board_size.y - (row - padding));
         } else {
-            std::cout << "   ";
+            printf("    ");
         }
-        std::cout << " ";
 
         for (int col = 0; col < data_size; ++col) {
             float value = feature_plane(feature_plane_index, row, col);
             bool on_board = (row >= padding && row < padding + board_size.y && col >= padding &&
                              col < padding + board_size.x);
 
-            std::string bg_color = (value == 1.0f) ? "\033[48;5;14m" :  // Cyan
+            const char* bg_color = (value == 1.0f) ? "\033[48;5;14m" :  // Cyan
                                        (on_board) ? "\033[48;5;94m"
                                                   :     // Brown
                                        "\033[48;5;0m";  // Black
@@ -466,34 +511,34 @@ void Board::print_feature_planes(Color to_play, int feature_plane_index) {
                 Color stone = Color(board[col][row]);
                 if (stone == Empty) {
                     if (col == padding && row == padding)
-                        std::cout << bg_color << "\033[38;5;0m┌─\033[0m";
+                        printf("%s\033[38;5;0m┌─\033[0m", bg_color);
                     else if (col == padding + board_size.x - 1 && row == padding)
-                        std::cout << bg_color << "\033[38;5;0m┐ \033[0m";
+                        printf("%s\033[38;5;0m┐ \033[0m", bg_color);
                     else if (col == padding && row == padding + board_size.y - 1)
-                        std::cout << bg_color << "\033[38;5;0m└─\033[0m";
+                        printf("%s\033[38;5;0m└─\033[0m", bg_color);
                     else if (col == padding + board_size.x - 1 && row == padding + board_size.y - 1)
-                        std::cout << bg_color << "\033[38;5;0m┘ \033[0m";
+                        printf("%s\033[38;5;0m┘ \033[0m", bg_color);
                     else if (col == padding)
-                        std::cout << bg_color << "\033[38;5;0m├─\033[0m";
+                        printf("%s\033[38;5;0m├─\033[0m", bg_color);
                     else if (col == padding + board_size.x - 1)
-                        std::cout << bg_color << "\033[38;5;0m┤ \033[0m";
+                        printf("%s\033[38;5;0m┤ \033[0m", bg_color);
                     else if (row == padding)
-                        std::cout << bg_color << "\033[38;5;0m┬─\033[0m";
+                        printf("%s\033[38;5;0m┬─\033[0m", bg_color);
                     else if (row == padding + board_size.y - 1)
-                        std::cout << bg_color << "\033[38;5;0m┴─\033[0m";
+                        printf("%s\033[38;5;0m┴─\033[0m", bg_color);
                     else
-                        std::cout << bg_color << "\033[38;5;0m┼─\033[0m";
+                        printf("%s\033[38;5;0m┼─\033[0m", bg_color);
                 } else if (stone == Black) {
-                    std::cout << bg_color << "\033[38;5;0m● \033[0m";
+                    printf("%s\033[38;5;0m● \033[0m", bg_color);
                 } else if (stone == White) {
-                    std::cout << bg_color << "\033[38;5;15m● \033[0m";
+                    printf("%s\033[38;5;15m● \033[0m", bg_color);
                 }
             } else {
-                std::string fg_color = (value == 1.0f) ? "\033[38;5;0m" : "\033[38;5;15m";
-                std::cout << bg_color << fg_color << "# \033[0m";
+                const char* fg_color = (value == 1.0f) ? "\033[38;5;0m" : "\033[38;5;15m";
+                printf("%s%s# \033[0m", bg_color, fg_color);
             }
         }
-        std::cout << std::endl;
+        printf("\n");
     }
 }
 

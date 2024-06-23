@@ -1,4 +1,4 @@
-#include <iomanip>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -12,7 +12,7 @@ namespace py = pybind11;
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cout << "Usage: " << argv[0] << " <sgf_file_path>" << std::endl;
+        printf("Usage: %s <sgf_file_path>\n", argv[0]);
         return 1;
     }
 
@@ -23,15 +23,16 @@ int main(int argc, char* argv[]) {
 
     load_sgf(file_path, board, moves, result);
 
+    printf("Board after setup:\n");
+    board.print();
+
     int i = 1;
     for (const auto& move : moves) {
+        printf("Playing move no. %d, which is: (%d, %d)\n", i, move.coord.x, move.coord.y);
         board.play(move);
-        std::cout << "Move no. " << i++ << ":\n";
         board.print();
 
-        std::cout << std::endl;
-        std::cout << "Illegal moves for " << (opposite(move.color) == Black ? "Black" : "White")
-                  << ":\n";
+        printf("Illegal moves for %s:\n", (opposite(move.color) == Black ? "Black" : "White"));
         board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
                                                   : Board::PrintMode::IllegalMovesWhite);
 
@@ -44,43 +45,44 @@ int main(int argc, char* argv[]) {
             py::array_t<float> stacked_maps = nn_input_data[0].cast<py::array_t<float>>();
             py::array_t<float> features = nn_input_data[1].cast<py::array_t<float>>();
 
-            std::cout << "NN Input Data after 75 moves:" << std::endl;
-            std::cout << "Stacked Maps:" << std::endl;
+            printf("NN Input Data after 75 moves:\n");
+            printf("Stacked Maps:\n");
 
             // Split the stacked maps into individual 2D maps and print them
             auto stacked_maps_unchecked = stacked_maps.unchecked<3>();
             for (py::ssize_t idx = 0; idx < stacked_maps_unchecked.shape(0); ++idx) {
-                std::cout << "Map " << (idx + 1) << ":" << std::endl;
+                printf("Map %ld:\n", idx + 1);
                 for (py::ssize_t row = 0; row < stacked_maps_unchecked.shape(1); ++row) {
                     for (py::ssize_t col = 0; col < stacked_maps_unchecked.shape(2); ++col) {
-                        std::cout << std::setw(2)
-                                  << static_cast<int>(stacked_maps_unchecked(idx, row, col)) << " ";
+                        printf("%2d ", static_cast<int>(stacked_maps_unchecked(idx, row, col)));
                     }
-                    std::cout << std::endl;
+                    printf("\n");
                 }
-                std::cout << std::endl;
+                printf("\n");
             }
 
-            std::cout << "Features:" << std::endl;
+            printf("Features:\n");
             // Print the features
             auto features_unchecked = features.unchecked<1>();
             for (py::ssize_t i = 0; i < features_unchecked.shape(0); ++i) {
-                std::cout << features_unchecked(i) << " ";
+                printf("%f ", features_unchecked(i));
             }
-            std::cout << std::endl << std::endl;
+            printf("\n\n");
         }
 
         printf("Feature plane 15:\n");
         board.print_feature_planes(opposite(move.color), 15);
+
+        ++i;
     }
 
-    std::cout << "Result: ";
+    printf("Result: ");
     if (result < 0) {
-        std::cout << "B+" << std::setprecision(1) << std::fixed << -result << std::endl;
+        printf("B+%.1f\n", -result);
     } else if (result > 0) {
-        std::cout << "W+" << std::setprecision(1) << std::fixed << result << std::endl;
+        printf("W+%.1f\n", result);
     } else {
-        std::cout << "0" << std::endl;
+        printf("0\n");
     }
 
     return 0;

@@ -25,6 +25,13 @@ public:
     ~Board() = default;
 
     void reset();
+    // Used for handicap and setup moves.
+    // Does not handle legality checks or captures.
+    // Does not influence superko.
+    // Does not get recorded history.
+    // Allows for "Empty" moves, meaning it erases stones from the board.
+    void setup_move(Move move);
+
     bool is_legal(Move move);
     void play(Move move);
 
