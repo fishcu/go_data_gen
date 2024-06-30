@@ -24,6 +24,8 @@ public:
 
     ~Board() = default;
 
+    float komi;
+
     void reset();
     // Used for handicap and setup moves.
     // Does not handle legality checks or captures.
@@ -65,8 +67,6 @@ public:
 private:
     char board[data_size][data_size];
     Vec2 board_size;
-
-    float komi;
 
     std::vector<Move> history;
 

@@ -74,9 +74,11 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
 
     // Extract moves
     // Doesn't handle branches!!
+    // Stop extraction after two consecutive passes
     const std::regex move_regex(R"(([BW])\[([a-z]{2})?\])");
     std::sregex_iterator move_iter(content.begin(), content.end(), move_regex);
-    while (move_iter != end) {
+    int consecutive_passes = 0;
+    while (move_iter != end && consecutive_passes < 2) {
         const std::smatch move_match = *move_iter;
 
         // Explictly need to skip false AB and AW matches since C++ regex doesn't support negative
@@ -98,8 +100,10 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             const int col = static_cast<int>(move_match[2].str()[0] - 'a');
             const int row = static_cast<int>(move_match[2].str()[1] - 'a');
             moves.push_back({color, {col, row}});
+            consecutive_passes = 0;
         } else {
             moves.push_back({color, pass});
+            ++consecutive_passes;
         }
 
         ++move_iter;

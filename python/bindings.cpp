@@ -74,6 +74,7 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def_readonly_static("data_size", &go_data_gen::Board::data_size)
         .def(py::init<>())
         .def(py::init<go_data_gen::Vec2, float>())
+        .def_readwrite("komi", &go_data_gen::Board::komi)
         .def("reset", &go_data_gen::Board::reset)
         .def("is_legal", &go_data_gen::Board::is_legal)
         .def("play", &go_data_gen::Board::play)
