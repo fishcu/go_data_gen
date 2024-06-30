@@ -19,8 +19,7 @@ public:
     static constexpr int padding = 1;
     static constexpr int data_size = max_board_size + 2 * padding;
 
-    Board() = default;
-    Board(Vec2 board_size, float komi);
+    Board(Vec2 board_size = {19, 19}, float komi = 7.5);
 
     ~Board() = default;
 
