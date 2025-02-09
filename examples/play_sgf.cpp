@@ -28,7 +28,12 @@ int main(int argc, char* argv[]) {
 
     int i = 1;
     for (const auto& move : moves) {
-        printf("Playing move no. %d, which is: (%d, %d)\n", i, move.coord.x, move.coord.y);
+        printf("Playing move no. %d, which is: ", i);
+        if (move.is_pass) {
+            printf("pass\n");
+        } else {
+            printf("(%d, %d)\n", move.coord.x, move.coord.y);
+        }
         board.play(move);
         board.print();
 

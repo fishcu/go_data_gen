@@ -37,6 +37,8 @@ void init_zobrist() {
 }
 
 uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Color color) {
+    assert(color == go_data_gen::Color::Black || color == go_data_gen::Color::White);
+    // TODO we don't need zobrist hashes for empty intersections!
     mem_coord.x -= go_data_gen::Board::padding;
     mem_coord.y -= go_data_gen::Board::padding;
     return zobrist_hashes[int(color) +
@@ -77,9 +79,8 @@ void Board::reset() {
 }
 
 void Board::setup_move(Move move) {
-    if (move.coord == pass) {
-        return;
-    }
+    assert(!move.is_pass);
+    assert(move.color != OffBoard);
 
     // Shift to accommodate border stored in data fields
     move.coord.x += padding;
@@ -124,7 +125,9 @@ void Board::setup_move(Move move) {
 }
 
 MoveLegality Board::get_move_legality(Move move) {
-    if (move.coord == pass) {
+    assert(move.color != OffBoard);
+
+    if (move.is_pass) {
         return Legal;
     }
 
@@ -190,14 +193,18 @@ MoveLegality Board::get_move_legality(Move move) {
     return Legal;
 }
 
-bool Board::is_legal(Move move) { return get_move_legality(move) == Legal; }
+bool Board::is_legal(Move move) {
+    assert(move.color != OffBoard);
+    return get_move_legality(move) == Legal;
+}
 
 void Board::play(Move move) {
+    assert(move.color == Black || move.color == White);
     assert(is_legal(move));
 
     history.push_back(move);
 
-    if (move.coord == pass) {
+    if (move.is_pass) {
         return;
     }
 
@@ -262,7 +269,7 @@ void Board::play(Move move) {
     zobrist_history.insert(zobrist);
 }
 
-py::array_t<float> Board::get_map(Color color, std::function<bool(int, int)> condition) {
+py::array_t<float> Board::get_map(std::function<bool(int, int)> condition) {
     py::array_t<float> map({Board::data_size, Board::data_size});
     auto buf = map.mutable_unchecked<2>();
     for (int i = 0; i < Board::data_size; ++i) {
@@ -275,35 +282,37 @@ py::array_t<float> Board::get_map(Color color, std::function<bool(int, int)> con
 }
 
 py::array_t<float> Board::get_mask() {
-    return get_map(OffBoard, [this](int i, int j) { return board[i][j] != OffBoard; });
+    return get_map([this](int i, int j) { return board[i][j] != OffBoard; });
 }
 
 py::array_t<float> Board::get_legal_map(Color color) {
-    return get_map(color, [this, color](int i, int j) {
-        return is_legal({color, {i - padding, j - padding}});
+    return get_map([this, color](int i, int j) {
+        return is_legal(Move{color, false, {i - padding, j - padding}});
     });
 }
 
 py::array_t<float> Board::get_stone_map(Color color) {
-    return get_map(color, [this, color](int i, int j) { return board[i][j] == color; });
+    return get_map([this, color](int i, int j) { return board[i][j] == color; });
 }
 
 py::array_t<float> Board::get_history_map(int dist) {
     // dist = 0 implies the move just played
     // dist = 1 implies the 2nd-last move played, and so on
     if (dist >= history.size()) {
-        return get_map(OffBoard, [](int, int) { return false; });
+        return get_map([](int, int) { return false; });
     }
-    // Pass is encoded just outside the board area, within the padded area.
     const auto move = history.rbegin()[dist];
-    return get_map(OffBoard, [this, move](int i, int j) {
-        return Vec2{i - padding, j - padding} == move.coord;
-    });
+    // Pass has no meaningful coordinate.
+    if (move.is_pass) {
+        return get_map([](int, int) { return false; });
+    }
+    return get_map(
+        [this, move](int i, int j) { return Vec2{i - padding, j - padding} == move.coord; });
 }
 
 py::array_t<float> Board::get_liberty_map(Color color, int num, bool or_greater) {
     if (or_greater) {
-        return get_map(color, [this, color, num](int i, int j) {
+        return get_map([this, color, num](int i, int j) {
             if (board[i][j] == color) {
                 const auto root = find(Vec2{i, j});
                 if (liberties[root.x][root.y].size() >= num) {
@@ -313,7 +322,7 @@ py::array_t<float> Board::get_liberty_map(Color color, int num, bool or_greater)
             return false;
         });
     }
-    return get_map(color, [this, color, num](int i, int j) {
+    return get_map([this, color, num](int i, int j) {
         if (board[i][j] == color) {
             const auto root = find(Vec2{i, j});
             if (liberties[root.x][root.y].size() == num) {
@@ -396,7 +405,8 @@ void Board::print(PrintMode mode) {
     printf("\n");
 
     Vec2 root;
-    Vec2 last_move_coord = history.empty() ? pass : history.back().coord;
+    bool last_move_is_on_board = !(history.empty() || history.back().is_pass);
+    Vec2 last_move_coord = last_move_is_on_board ? history.back().coord : Vec2{-1, -1};
 
     for (int row = 0; row < board_size.y; ++row) {
         printf("%2d ", board_size.y - row);
@@ -431,14 +441,16 @@ void Board::print(PrintMode mode) {
                         printf("\033[48;5;94m\033[38;5;0m┼─\033[0m");
                     break;
                 case Black:
-                    if (col == last_move_coord.x && row == last_move_coord.y) {
+                    if (last_move_is_on_board && col == last_move_coord.x &&
+                        row == last_move_coord.y) {
                         printf("\033[48;5;208m\033[38;5;0m● \033[0m");
                     } else {
                         printf("\033[48;5;94m\033[38;5;0m● \033[0m");
                     }
                     break;
                 case White:
-                    if (col == last_move_coord.x && row == last_move_coord.y) {
+                    if (last_move_is_on_board && col == last_move_coord.x &&
+                        row == last_move_coord.y) {
                         printf("\033[48;5;208m\033[38;5;15m● \033[0m");
                     } else {
                         printf("\033[48;5;94m\033[38;5;15m● \033[0m");
@@ -464,7 +476,7 @@ void Board::print(PrintMode mode) {
                 break;
             case IllegalMovesBlack:
             case IllegalMovesWhite:
-                const Move move = {mode == IllegalMovesBlack ? Black : White, {col, row}};
+                const Move move{mode == IllegalMovesBlack ? Black : White, false, {col, row}};
                 if (board[col + padding][row + padding] == Empty && !is_legal(move)) {
                     printf("X ");
                 } else {

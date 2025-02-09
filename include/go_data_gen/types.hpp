@@ -30,13 +30,19 @@ struct Vec2 {
     }
 };
 
-constexpr Vec2 pass{-1, -1};
-
 struct Move {
     Color color;
-    Vec2 coord;
+    bool is_pass;
+    Vec2 coord;  // Only valid if is_pass is false.
+
+    Move() = delete;
+    explicit Move(Color c, bool pass, Vec2 pos) : color(c), is_pass(pass), coord(pos) {}
+
     bool operator==(const Move& other) const {
-        return color == other.color && coord == other.coord;
+        // Both moves need to be a pass of the same color (coordinates don't matter),
+        // or both need to be not a pass and have the same coordinates.
+        return color == other.color &&
+               (is_pass ? other.is_pass : (!other.is_pass && coord == other.coord));
     }
     bool operator!=(const Move& other) const { return !(operator==(other)); }
 };

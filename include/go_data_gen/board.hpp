@@ -82,7 +82,7 @@ private:
     std::set<uint64_t> zobrist_history;
 
     // Common function for all get_*_map functions
-    pybind11::array_t<float> get_map(Color color, std::function<bool(int, int)> condition);
+    pybind11::array_t<float> get_map(std::function<bool(int, int)> condition);
 };
 
 }  // namespace go_data_gen

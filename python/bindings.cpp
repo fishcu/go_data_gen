@@ -40,27 +40,20 @@ public:
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
 
-    // Bind Color enum
     py::enum_<go_data_gen::Color>(m, "Color")
         .value("Empty", go_data_gen::Empty)
         .value("Black", go_data_gen::Black)
         .value("White", go_data_gen::White)
         .value("OffBoard", go_data_gen::OffBoard);
 
-    // Bind the opposite function
     m.def("opposite", &go_data_gen::opposite, "Get the opposite color", py::arg("color"));
 
-    // Since Vec2 is exposed as a tuple, specify what the pass coordinate is.
-    // Gotta use a different name than "pass" because that is a reserved keyword in Python.
-    m.attr("pass_coord") = py::make_tuple(-1, -1);
-
-    // Bind Move struct
     py::class_<go_data_gen::Move>(m, "Move")
-        .def(py::init<go_data_gen::Color, go_data_gen::Vec2>())
+        .def(py::init<go_data_gen::Color, bool, go_data_gen::Vec2>())
         .def_readwrite("color", &go_data_gen::Move::color)
+        .def_readwrite("is_pass", &go_data_gen::Move::is_pass)
         .def_readwrite("coord", &go_data_gen::Move::coord);
 
-    // Bind PrintMode enum
     py::enum_<go_data_gen::Board::PrintMode>(m, "PrintMode")
         .value("Default", go_data_gen::Board::Default)
         .value("GroupSize", go_data_gen::Board::GroupSize)
@@ -93,7 +86,6 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("print_feature_planes", &go_data_gen::Board::print_feature_planes, py::arg("to_play"),
              py::arg("feature_plane_index") = 0);
 
-    // Bind free function to return a tuple
     m.def(
         "load_sgf",
         [](const std::string& file_path) {

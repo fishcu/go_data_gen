@@ -59,11 +59,11 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             const int row = static_cast<int>(coord_match[1].str()[1] - 'a');
 
             if (setup_type == 'B') {
-                board.setup_move({Black, {col, row}});
+                board.setup_move(Move{Black, false, {col, row}});
             } else if (setup_type == 'W') {
-                board.setup_move({White, {col, row}});
+                board.setup_move(Move{White, false, {col, row}});
             } else if (setup_type == 'E') {
-                board.setup_move({Empty, {col, row}});
+                board.setup_move(Move{Empty, false, {col, row}});
             }
 
             ++coord_iter;
@@ -99,10 +99,10 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
         if (move_match[2].matched) {
             const int col = static_cast<int>(move_match[2].str()[0] - 'a');
             const int row = static_cast<int>(move_match[2].str()[1] - 'a');
-            moves.push_back({color, {col, row}});
+            moves.push_back(Move{color, false, {col, row}});
             consecutive_passes = 0;
         } else {
-            moves.push_back({color, pass});
+            moves.push_back(Move{color, true, {}});
             ++consecutive_passes;
         }
 
