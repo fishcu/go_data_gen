@@ -21,7 +21,7 @@ namespace py = pybind11;
 namespace {
 
 uint64_t
-    zobrist_hashes[go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 3];
+    zobrist_hashes[go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 2];
 
 void init_zobrist() {
     static bool initialized = false;
@@ -38,11 +38,10 @@ void init_zobrist() {
 
 uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Color color) {
     assert(color == go_data_gen::Color::Black || color == go_data_gen::Color::White);
-    // TODO we don't need zobrist hashes for empty intersections!
     mem_coord.x -= go_data_gen::Board::padding;
     mem_coord.y -= go_data_gen::Board::padding;
-    return zobrist_hashes[int(color) +
-                          (mem_coord.x + mem_coord.y * go_data_gen::Board::max_board_size) * 3];
+    return zobrist_hashes[(color == go_data_gen::Color::Black ? 0 : 1) +
+                          (mem_coord.x + mem_coord.y * go_data_gen::Board::max_board_size) * 2];
 }
 
 }  // namespace
