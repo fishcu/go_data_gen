@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "board.hpp"
+#include "go_data_gen/board.hpp"
 
 namespace go_data_gen {
 

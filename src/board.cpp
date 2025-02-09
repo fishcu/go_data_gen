@@ -390,6 +390,7 @@ pybind11::tuple Board::get_nn_input_data(Color to_play) {
     return py::make_tuple(stacked_maps, features);
 }
 
+# if 0
 void Board::print(PrintMode mode) {
     printf("   ");
     if (mode == Default) {
@@ -557,6 +558,7 @@ void Board::print_feature_planes(Color to_play, int feature_plane_index) {
         printf("\n");
     }
 }
+#endif
 
 Vec2 Board::find(Vec2 coord) {
     while (parent[coord.x][coord.y] != coord) {

@@ -54,16 +54,10 @@ public:
     static constexpr int num_feature_scalars = 1;
     pybind11::tuple get_nn_input_data(Color to_play);
 
-    enum PrintMode {
-        Default = 0,
-        GroupSize,
-        Liberties,
-        IllegalMovesBlack,
-        IllegalMovesWhite,
-    };
-    void print(PrintMode mode = Default);
-
-    void print_feature_planes(Color to_play, int feature_plane_index = 0);
+    friend class BoardPrinter;
+    void print(std::optional<int> highlight_feature = std::nullopt);
+    void print_group_sizes();
+    void print_liberties();
 
 private:
     char board[data_size][data_size];
