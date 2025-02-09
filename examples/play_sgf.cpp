@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
             // Split the stacked maps into individual 2D maps and print them
             auto stacked_maps_unchecked = stacked_maps.unchecked<3>();
             for (py::ssize_t idx = 0; idx < stacked_maps_unchecked.shape(0); ++idx) {
-                printf("Map %ld:\n", idx + 1);
+                printf("Map %ld:\n", idx);
                 for (py::ssize_t row = 0; row < stacked_maps_unchecked.shape(1); ++row) {
                     for (py::ssize_t col = 0; col < stacked_maps_unchecked.shape(2); ++col) {
                         printf("%2d ", static_cast<int>(stacked_maps_unchecked(idx, row, col)));

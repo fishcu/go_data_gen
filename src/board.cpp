@@ -95,7 +95,7 @@ void Board::setup_move(Move move) {
         liberties[move.coord.x][move.coord.y].clear();
     }
 
-    Vec2 neighbor, root, root2;
+    Vec2 neighbor, root;
 
     // Update liberties and connect groups
     FOR_EACH_NEIGHBOR(
@@ -123,9 +123,9 @@ void Board::setup_move(Move move) {
     )
 }
 
-bool Board::is_legal(Move move) {
+MoveLegality Board::get_move_legality(Move move) {
     if (move.coord == pass) {
-        return true;
+        return Legal;
     }
 
     // Shift to accommodate border stored in data fields
@@ -135,7 +135,7 @@ bool Board::is_legal(Move move) {
     // Board must be empty
     if (board[move.coord.x][move.coord.y] != Empty) {
         // assert(false);
-        return false;
+        return NonEmpty;
     }
 
     // Simulate playing stone
@@ -164,6 +164,16 @@ bool Board::is_legal(Move move) {
             }
         })
 
+    // Must not be suicide
+    if (captures.empty()) {
+        // Account for this move stealing last liberty of neighboring group without adding any
+        added_liberties.erase(move.coord);
+        if (added_liberties.empty()) {
+            // assert(false);
+            return Suicidal;
+        }
+    }
+
     // Calculate zobrist if captured groups are removed
     for (auto capture : captures) {
         for (auto stone : group[capture.x][capture.y]) {
@@ -174,21 +184,13 @@ bool Board::is_legal(Move move) {
     // Must not be superko
     if (zobrist_history.find(new_zobrist) != zobrist_history.end()) {
         // assert(false);
-        return false;
+        return Superko;
     }
 
-    // Must not be suicide
-    if (captures.empty()) {
-        // Account for this move stealing last liberty of neighboring group without adding any
-        added_liberties.erase(move.coord);
-        if (added_liberties.empty()) {
-            // assert(false);
-            return false;
-        }
-    }
-
-    return true;
+    return Legal;
 }
+
+bool Board::is_legal(Move move) { return get_move_legality(move) == Legal; }
 
 void Board::play(Move move) {
     assert(is_legal(move));
@@ -235,19 +237,22 @@ void Board::play(Move move) {
                     zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
                     // Nested macros, now we're entering the danger zone
                     FOR_EACH_NEIGHBOR(
-                        stone, neighbor, if (board[neighbor.x][neighbor.y] == move.color) {
-                            // The opposite of the opposite of the move color is the move color.
+                        stone, neighbor,
+                        // The opposite of the opposite of the move color is the move color.
+                        if (board[neighbor.x][neighbor.y] == move.color) {
                             // Capturing a group of the opposite color frees liberties for the move
                             // color.
                             root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
                             liberties[root2.x][root2.y].insert(stone);
                         })
+#ifndef NDEBUG
                     // We don't need to maintain other data structures here.
                     // For debugging, clean up anyway.
-                    // parent[stone.x][stone.y].x = stone.x;
-                    // parent[stone.x][stone.y].y = stone.y;
-                    // group[stone.x][stone.y].clear();
-                    // liberties[stone.x][stone.y].clear();
+                    parent[stone.x][stone.y].x = stone.x;
+                    parent[stone.x][stone.y].y = stone.y;
+                    group[stone.x][stone.y].clear();
+                    liberties[stone.x][stone.y].clear();
+#endif
                 }
             }
         })
@@ -332,8 +337,8 @@ pybind11::tuple Board::get_nn_input_data(Color to_play) {
 
     const auto mask = get_mask();
     const auto legal_map = get_legal_map(to_play);
-    const auto stone_map_to_play = get_stone_map(to_play);
-    const auto stone_map_opp_col = get_stone_map(opp_col);
+    const auto stone_map_own = get_stone_map(to_play);
+    const auto stone_map_opp = get_stone_map(opp_col);
     const auto hist_map_0 = get_history_map(0);
     const auto hist_map_1 = get_history_map(1);
     const auto hist_map_2 = get_history_map(2);
@@ -351,8 +356,8 @@ pybind11::tuple Board::get_nn_input_data(Color to_play) {
         for (int j = 0; j < data_size; ++j) {
             buf(0, i, j) = mask.at(i, j);
             buf(1, i, j) = legal_map.at(i, j);
-            buf(2, i, j) = stone_map_to_play.at(i, j);
-            buf(3, i, j) = stone_map_opp_col.at(i, j);
+            buf(2, i, j) = stone_map_own.at(i, j);
+            buf(3, i, j) = stone_map_opp.at(i, j);
             buf(4, i, j) = hist_map_0.at(i, j);
             buf(5, i, j) = hist_map_1.at(i, j);
             buf(6, i, j) = hist_map_2.at(i, j);
@@ -461,7 +466,7 @@ void Board::print(PrintMode mode) {
             case IllegalMovesWhite:
                 const Move move = {mode == IllegalMovesBlack ? Black : White, {col, row}};
                 if (board[col + padding][row + padding] == Empty && !is_legal(move)) {
-                    printf("0 ");
+                    printf("X ");
                 } else {
                     printf(". ");
                 }

@@ -60,7 +60,7 @@ setup(
     version='0.1.0',
     author='fishku',
     author_email='isaacbd@gmail.com',
-    description='A C++ library with Pybind11 bindings for computer GO input generation',
+    description='A C++ library with Pybind11 bindings for Computer Go input generation',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     ext_modules=[CMakeExtension('go_data_gen', sourcedir='.')],

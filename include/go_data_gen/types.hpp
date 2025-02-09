@@ -41,4 +41,11 @@ struct Move {
     bool operator!=(const Move& other) const { return !(operator==(other)); }
 };
 
+enum MoveLegality {
+    Legal = 0,
+    NonEmpty = 1,
+    Suicidal = 2,
+    Superko = 3,
+};
+
 }  // namespace go_data_gen

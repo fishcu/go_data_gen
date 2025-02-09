@@ -33,7 +33,9 @@ public:
     // Allows for "Empty" moves, meaning it erases stones from the board.
     void setup_move(Move move);
 
+    MoveLegality get_move_legality(Move move);
     bool is_legal(Move move);
+
     void play(Move move);
 
     pybind11::array_t<float> get_mask();
