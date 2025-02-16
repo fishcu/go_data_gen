@@ -98,6 +98,7 @@ void Board::print_group_sizes() {
         }
         printf("\n");
     }
+    printf("\n");
 }
 
 void Board::print_liberties() {
@@ -109,6 +110,7 @@ void Board::print_liberties() {
         }
         printf("\n");
     }
+    printf("\n");
 }
 
 }  // namespace go_data_gen

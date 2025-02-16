@@ -3,10 +3,7 @@
 #include <iostream>
 #include <random>
 
-#include "go_data_gen/python_env.hpp"
 #include "go_data_gen/types.hpp"
-
-namespace py = pybind11;
 
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
     (n_coord) = {coord.x - 1, coord.y};         \
@@ -52,7 +49,7 @@ Board::Board(Vec2 _board_size, float _komi) : board_size{_board_size}, komi{_kom
     assert(board_size.x <= max_board_size && board_size.y <= max_board_size &&
            "Maximum size exceeded");
 
-    PythonEnvironment::instance();  // Ensures Python is initialized
+    // PythonEnvironment::instance();  // Ensures Python is initialized
 
     init_zobrist();
     reset();
@@ -320,7 +317,7 @@ Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
     return result;
 }
 
-Board::FeatureVector Board::get_scalar_features(Color to_play) {
+Board::FeatureVector Board::get_feature_scalars(Color to_play) {
     static constexpr int num_features_before_pass_features = 2;
     static constexpr int num_pass_features = 5;
     static_assert(num_feature_scalars == num_features_before_pass_features + num_pass_features);
@@ -344,37 +341,6 @@ Board::FeatureVector Board::get_scalar_features(Color to_play) {
     }
 
     return result;
-}
-
-pybind11::tuple Board::get_nn_input_data(Color to_play) {
-    namespace py = pybind11;
-
-    // Get feature planes and scalar features
-    auto feature_planes = get_feature_planes(to_play);
-    auto scalar_features = get_scalar_features(to_play);
-
-    // Create numpy array for feature planes
-    auto features_array = py::array_t<float>({data_size, data_size, num_feature_planes});
-    auto features_mu = features_array.mutable_unchecked<3>();
-
-    // Copy feature planes data using mutable_unchecked
-    for (size_t y = 0; y < data_size; ++y) {
-        for (size_t x = 0; x < data_size; ++x) {
-            for (size_t c = 0; c < num_feature_planes; ++c) {
-                features_mu(y, x, c) = feature_planes[y][x][c];
-            }
-        }
-    }
-
-    // Create numpy array for scalar features
-    auto scalars_array = py::array_t<float>({num_feature_scalars});
-
-    // Copy scalar features using memcpy for efficiency
-    auto scalars_mu = scalars_array.mutable_unchecked<1>();
-    std::memcpy(scalars_mu.mutable_data(0), scalar_features.data(),
-                num_feature_scalars * sizeof(float));
-
-    return py::make_tuple(features_array, scalars_array);
 }
 
 Vec2 Board::find(Vec2 coord) {

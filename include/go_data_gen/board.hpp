@@ -1,9 +1,5 @@
 #pragma once
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <functional>
 #include <set>
 #include <string>
@@ -44,10 +40,7 @@ public:
 
     static constexpr int num_feature_scalars = 7;
     using FeatureVector = std::array<float, num_feature_scalars>;
-    FeatureVector get_scalar_features(Color to_play);
-
-    // Tuple of stacked feature planes and scalar features
-    pybind11::tuple get_nn_input_data(Color to_play);
+    FeatureVector get_feature_scalars(Color to_play);
 
     void print(std::function<bool(int x, int y)> highlight_fn = [](int, int) { return false; });
     void print_group_sizes();

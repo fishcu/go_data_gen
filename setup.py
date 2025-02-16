@@ -57,7 +57,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='go_data_gen',
-    version='0.1.0',
+    version='0.2.0',
     author='fishku',
     author_email='isaacbd@gmail.com',
     description='A C++ library with Pybind11 bindings for Computer Go input generation',
