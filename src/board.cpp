@@ -59,17 +59,17 @@ Board::Board(Vec2 _board_size, float _komi) : board_size{_board_size}, komi{_kom
 }
 
 void Board::reset() {
-    for (int i = 0; i < data_size; ++i) {
-        for (int j = 0; j < data_size; ++j) {
-            board[i][j] = char(OffBoard);
-            if (i >= padding && j >= padding && i < padding + board_size.x &&
-                j < padding + board_size.y) {
-                board[i][j] = Empty;
+    for (int y = 0; y < data_size; ++y) {
+        for (int x = 0; x < data_size; ++x) {
+            board[y][x] = char(OffBoard);
+            if (y >= padding && x >= padding && y < padding + board_size.y &&
+                x < padding + board_size.x) {
+                board[y][x] = Empty;
             }
 
-            parent[i][j] = {i, j};
-            group[i][j].clear();
-            liberties[i][j].clear();
+            parent[y][x] = {x, y};
+            group[y][x].clear();
+            liberties[y][x].clear();
         }
     }
     history.clear();
@@ -81,42 +81,41 @@ void Board::setup_move(Move move) {
     assert(!move.is_pass);
     assert(move.color != OffBoard);
 
-    // Shift to accommodate border stored in data fields
-    move.coord.x += padding;
-    move.coord.y += padding;
+    // Shift coordinate to account for padding of data fields.
+    const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
-    board[move.coord.x][move.coord.y] = move.color;
+    board[mem_coord.y][mem_coord.x] = move.color;
 
     if (move.color == Black || move.color == White) {
         // Initialize new group
-        parent[move.coord.x][move.coord.y] = move.coord;
-        group[move.coord.x][move.coord.y].clear();
-        group[move.coord.x][move.coord.y].push_back(move.coord);
-        liberties[move.coord.x][move.coord.y].clear();
+        parent[mem_coord.y][mem_coord.x] = mem_coord;
+        group[mem_coord.y][mem_coord.x].clear();
+        group[mem_coord.y][mem_coord.x].push_back(mem_coord);
+        liberties[mem_coord.y][mem_coord.x].clear();
     }
 
     Vec2 neighbor, root;
 
     // Update liberties and connect groups
     FOR_EACH_NEIGHBOR(
-        move.coord, neighbor,
+        mem_coord, neighbor,
         if (move.color == Empty) {
-            if (board[neighbor.x][neighbor.y] == Black || board[neighbor.x][neighbor.y] == White) {
+            if (board[neighbor.y][neighbor.x] == Black || board[neighbor.y][neighbor.x] == White) {
                 root = find(neighbor);
-                liberties[root.x][root.y].insert(move.coord);
+                liberties[root.y][root.x].insert(mem_coord);
             }
         } else {
             const auto opp_col = opposite(move.color);
-            if (board[neighbor.x][neighbor.y] == Empty) {
-                root = find(move.coord);
-                liberties[root.x][root.y].insert(neighbor);
-            } else if (board[neighbor.x][neighbor.y] == move.color) {
+            if (board[neighbor.y][neighbor.x] == Empty) {
+                root = find(mem_coord);
+                liberties[root.y][root.x].insert(neighbor);
+            } else if (board[neighbor.y][neighbor.x] == move.color) {
                 root = find(neighbor);
-                liberties[root.x][root.y].erase(move.coord);
-                unite(move.coord, neighbor);
-            } else if (board[neighbor.x][neighbor.y] == opp_col) {
+                liberties[root.y][root.x].erase(mem_coord);
+                unite(mem_coord, neighbor);
+            } else if (board[neighbor.y][neighbor.x] == opp_col) {
                 root = find(neighbor);
-                liberties[root.x][root.y].erase(move.coord);
+                liberties[root.y][root.x].erase(mem_coord);
             }
         }
 
@@ -124,25 +123,23 @@ void Board::setup_move(Move move) {
 }
 
 MoveLegality Board::get_move_legality(Move move) {
-    assert(move.color != OffBoard);
+    assert(move.color == Black || move.color == White);
 
     if (move.is_pass) {
         return Legal;
     }
 
-    // Shift to accommodate border stored in data fields
-    move.coord.x += padding;
-    move.coord.y += padding;
+    // Shift coordinate to account for padding of data fields.
+    const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
     // Board must be empty
-    if (board[move.coord.x][move.coord.y] != Empty) {
-        // assert(false);
+    if (board[mem_coord.y][mem_coord.x] != Empty) {
         return NonEmpty;
     }
 
     // Simulate playing stone
     const auto opp_col = opposite(move.color);
-    auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(move.coord, move.color);
+    auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(mem_coord, move.color);
 
     Vec2 neighbor, root;
 
@@ -152,16 +149,16 @@ MoveLegality Board::get_move_legality(Move move) {
     std::set<Vec2> added_liberties;
     std::set<Vec2> captures;
     FOR_EACH_NEIGHBOR(
-        move.coord, neighbor,
-        if (board[neighbor.x][neighbor.y] == Empty) {
+        mem_coord, neighbor,
+        if (board[neighbor.y][neighbor.x] == Empty) {
             added_liberties.insert(neighbor);
-        } else if (board[neighbor.x][neighbor.y] == move.color) {
+        } else if (board[neighbor.y][neighbor.x] == move.color) {
             root = find(neighbor);
-            added_liberties.insert(liberties[root.x][root.y].begin(),
-                                   liberties[root.x][root.y].end());
-        } else if (board[neighbor.x][neighbor.y] == opp_col) {
+            added_liberties.insert(liberties[root.y][root.x].begin(),
+                                   liberties[root.y][root.x].end());
+        } else if (board[neighbor.y][neighbor.x] == opp_col) {
             root = find(neighbor);
-            if (liberties[root.x][root.y].size() == 1) {
+            if (liberties[root.y][root.x].size() == 1) {
                 captures.insert(root);
             }
         })
@@ -169,7 +166,7 @@ MoveLegality Board::get_move_legality(Move move) {
     // Must not be suicide
     if (captures.empty()) {
         // Account for this move stealing last liberty of neighboring group without adding any
-        added_liberties.erase(move.coord);
+        added_liberties.erase(mem_coord);
         if (added_liberties.empty()) {
             // assert(false);
             return Suicidal;
@@ -178,7 +175,7 @@ MoveLegality Board::get_move_legality(Move move) {
 
     // Calculate zobrist if captured groups are removed
     for (auto capture : captures) {
-        for (auto stone : group[capture.x][capture.y]) {
+        for (auto stone : group[capture.y][capture.x]) {
             new_zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
         }
     }
@@ -192,14 +189,9 @@ MoveLegality Board::get_move_legality(Move move) {
     return Legal;
 }
 
-bool Board::is_legal(Move move) {
-    assert(move.color != OffBoard);
-    return get_move_legality(move) == Legal;
-}
-
 void Board::play(Move move) {
     assert(move.color == Black || move.color == White);
-    assert(is_legal(move));
+    assert(get_move_legality(move) == Legal);
 
     history.push_back(move);
 
@@ -207,363 +199,188 @@ void Board::play(Move move) {
         return;
     }
 
-    // Shift to accommodate border stored in data fields
-    move.coord.x += padding;
-    move.coord.y += padding;
+    // Shift coordinate to account for padding of data fields.
+    const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
     const auto opp_col = opposite(move.color);
 
-    board[move.coord.x][move.coord.y] = move.color;
+    board[mem_coord.y][mem_coord.x] = move.color;
 
     // Initialize new group
-    parent[move.coord.x][move.coord.y] = move.coord;
-    group[move.coord.x][move.coord.y].clear();
-    group[move.coord.x][move.coord.y].push_back(move.coord);
-    liberties[move.coord.x][move.coord.y].clear();
+    parent[mem_coord.y][mem_coord.x] = mem_coord;
+    group[mem_coord.y][mem_coord.x].clear();
+    group[mem_coord.y][mem_coord.x].push_back(mem_coord);
+    liberties[mem_coord.y][mem_coord.x].clear();
 
     Vec2 neighbor, root, root2;
 
     // Add liberties, connect to own groups, and figure out captured groups
     FOR_EACH_NEIGHBOR(
-        move.coord, neighbor,
-        if (board[neighbor.x][neighbor.y] == Empty) {
-            root = find(move.coord);
-            liberties[root.x][root.y].insert(neighbor);
-        } else if (board[neighbor.x][neighbor.y] == move.color) {
+        mem_coord, neighbor,
+        if (board[neighbor.y][neighbor.x] == Empty) {
+            root = find(mem_coord);
+            liberties[root.y][root.x].insert(neighbor);
+        } else if (board[neighbor.y][neighbor.x] == move.color) {
             root = find(neighbor);
-            liberties[root.x][root.y].erase(move.coord);
-            unite(move.coord, neighbor);
-        } else if (board[neighbor.x][neighbor.y] == opp_col) {
+            liberties[root.y][root.x].erase(mem_coord);
+            unite(mem_coord, neighbor);
+        } else if (board[neighbor.y][neighbor.x] == opp_col) {
             root = find(neighbor);
-            liberties[root.x][root.y].erase(move.coord);
-            if (liberties[root.x][root.y].size() == 0) {
+            liberties[root.y][root.x].erase(mem_coord);
+            if (liberties[root.y][root.x].size() == 0) {
                 // Group is captured
-                for (auto stone : group[root.x][root.y]) {
-                    board[stone.x][stone.y] = Empty;
+                for (auto stone : group[root.y][root.x]) {
+                    board[stone.y][stone.x] = Empty;
                     zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
                     // Nested macros, now we're entering the danger zone
                     FOR_EACH_NEIGHBOR(
                         stone, neighbor,
                         // The opposite of the opposite of the move color is the move color.
-                        if (board[neighbor.x][neighbor.y] == move.color) {
+                        if (board[neighbor.y][neighbor.x] == move.color) {
                             // Capturing a group of the opposite color frees liberties for the move
                             // color.
                             root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
-                            liberties[root2.x][root2.y].insert(stone);
+                            liberties[root2.y][root2.x].insert(stone);
                         })
 #ifndef NDEBUG
                     // We don't need to maintain other data structures here.
                     // For debugging, clean up anyway.
-                    parent[stone.x][stone.y].x = stone.x;
-                    parent[stone.x][stone.y].y = stone.y;
-                    group[stone.x][stone.y].clear();
-                    liberties[stone.x][stone.y].clear();
+                    parent[stone.y][stone.x].x = stone.x;
+                    parent[stone.y][stone.x].y = stone.y;
+                    group[stone.y][stone.x].clear();
+                    liberties[stone.y][stone.x].clear();
 #endif
                 }
             }
         })
 
     // Update zobrist hash
-    zobrist ^= mem_coord_color_to_zobrist(move.coord, move.color);
+    zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
     zobrist_history.insert(zobrist);
 }
 
-py::array_t<float> Board::get_map(std::function<bool(int, int)> condition) {
-    py::array_t<float> map({Board::data_size, Board::data_size});
-    auto buf = map.mutable_unchecked<2>();
-    for (int i = 0; i < Board::data_size; ++i) {
-        for (int j = 0; j < Board::data_size; ++j) {
-            // Board uses column-major ordering, numpy uses row-major by default.
-            buf(i, j) = condition(j, i) ? 1.0 : 0.0;
-        }
-    }
-    return map;
-}
+Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
+    static constexpr int num_planes_before_lib_planes = 5;
+    static constexpr int num_lib_planes = 4;
+    static constexpr int num_planes_before_history_planes =
+        num_planes_before_lib_planes + 2 * num_lib_planes;
+    static constexpr int num_history_planes = 5;
+    static_assert(num_feature_planes == num_planes_before_history_planes + num_history_planes);
 
-py::array_t<float> Board::get_mask() {
-    return get_map([this](int i, int j) { return board[i][j] != OffBoard; });
-}
+    const auto opp_col = opposite(to_play);
 
-py::array_t<float> Board::get_legal_map(Color color) {
-    return get_map([this, color](int i, int j) {
-        return is_legal(Move{color, false, {i - padding, j - padding}});
-    });
-}
+    // Zero-initialize.
+    StackedFeaturePlanes result{};
+    for (int y = 0; y < Board::data_size; ++y) {
+        for (int x = 0; x < Board::data_size; ++x) {
+            const auto move_legality =
+                get_move_legality(Move{to_play, false, {x - padding, y - padding}});
 
-py::array_t<float> Board::get_stone_map(Color color) {
-    return get_map([this, color](int i, int j) { return board[i][j] == color; });
-}
+            // Legal to play
+            result[y][x][0] = static_cast<float>(move_legality == Legal);
+            // Own color
+            result[y][x][1] = static_cast<float>(board[y][x] == to_play);
+            // Opponent color
+            result[y][x][2] = static_cast<float>(board[y][x] == opp_col);
+            // Is on-board
+            result[y][x][3] = static_cast<float>(board[y][x] != OffBoard);
 
-py::array_t<float> Board::get_history_map(int dist) {
-    // dist = 0 implies the move just played
-    // dist = 1 implies the 2nd-last move played, and so on
-    if (dist >= history.size()) {
-        return get_map([](int, int) { return false; });
-    }
-    const auto move = history.rbegin()[dist];
-    // Pass has no meaningful coordinate.
-    if (move.is_pass) {
-        return get_map([](int, int) { return false; });
-    }
-    return get_map(
-        [this, move](int i, int j) { return Vec2{i - padding, j - padding} == move.coord; });
-}
+            // Mark superko
+            result[y][x][4] = static_cast<float>(move_legality == Superko);
 
-py::array_t<float> Board::get_liberty_map(Color color, int num, bool or_greater) {
-    if (or_greater) {
-        return get_map([this, color, num](int i, int j) {
-            if (board[i][j] == color) {
-                const auto root = find(Vec2{i, j});
-                if (liberties[root.x][root.y].size() >= num) {
-                    return true;
+            // Liberties of own and opponent groups
+            if (board[y][x] == Black || board[y][x] == White) {
+                const auto root = find(Vec2{x, y});
+                const int num_libs = liberties[root.y][root.x].size();
+                if (board[y][x] == to_play) {
+                    result[y][x][num_planes_before_lib_planes + std::min(num_libs, num_lib_planes) -
+                                 1] = 1.0;
+                } else {
+                    result[y][x][num_planes_before_lib_planes + num_lib_planes +
+                                 std::min(num_libs, num_lib_planes) - 1] = 1.0;
                 }
             }
-            return false;
-        });
+
+            // TODO: pass-alive areas, ladder status.
+        }
     }
-    return get_map([this, color, num](int i, int j) {
-        if (board[i][j] == color) {
-            const auto root = find(Vec2{i, j});
-            if (liberties[root.x][root.y].size() == num) {
-                return true;
+
+    // History of moves. dist = 0 implies the move just played.
+    // dist = 1 implies the 2nd-last move played, and so on.
+    for (int dist = 0; dist < num_history_planes; ++dist) {
+        if (dist < history.size()) {
+            const auto& history_move = history.rbegin()[dist];
+            if (!history_move.is_pass) {
+                result[history_move.coord.y + padding][history_move.coord.x + padding]
+                      [num_planes_before_history_planes + dist] = 1.0;
             }
         }
-        return false;
-    });
+    }
+
+    return result;
 }
 
-float Board::get_komi_from_player_perspective(Color to_play) {
-    return to_play == White ? komi : -komi;
+Board::FeatureVector Board::get_scalar_features(Color to_play) {
+    static constexpr int num_features_before_pass_features = 2;
+    static constexpr int num_pass_features = 5;
+    static_assert(num_feature_scalars == num_features_before_pass_features + num_pass_features);
+
+    // Zero-initialize.
+    FeatureVector result{};
+
+    // Komi from player perspective. Normalize like KataGo.
+    result[0] = (to_play == White ? komi : -komi) / 15.0;
+
+    // There is a superko move
+    result[1] = static_cast<float>(any_superko_move(to_play));
+
+    // N-last move was pass
+    for (int dist = 0; dist < num_pass_features; ++dist) {
+        if (dist < history.size()) {
+            const auto& history_move = history.rbegin()[dist];
+            result[num_features_before_pass_features + dist] =
+                static_cast<float>(history_move.is_pass);
+        }
+    }
+
+    return result;
 }
 
 pybind11::tuple Board::get_nn_input_data(Color to_play) {
-    const Color opp_col = opposite(to_play);
+    namespace py = pybind11;
 
-    // Stack the feature maps depth-wise
-    py::array_t<float> stacked_maps({num_feature_planes, data_size, data_size});
-    auto buf = stacked_maps.mutable_unchecked<3>();
+    // Get feature planes and scalar features
+    auto feature_planes = get_feature_planes(to_play);
+    auto scalar_features = get_scalar_features(to_play);
 
-    const auto mask = get_mask();
-    const auto legal_map = get_legal_map(to_play);
-    const auto stone_map_own = get_stone_map(to_play);
-    const auto stone_map_opp = get_stone_map(opp_col);
-    const auto hist_map_0 = get_history_map(0);
-    const auto hist_map_1 = get_history_map(1);
-    const auto hist_map_2 = get_history_map(2);
-    const auto hist_map_3 = get_history_map(3);
-    const auto hist_map_4 = get_history_map(4);
-    const auto lib_map_own_1 = get_liberty_map(to_play, 1);
-    const auto lib_map_opp_1 = get_liberty_map(opp_col, 1);
-    const auto lib_map_own_2 = get_liberty_map(to_play, 2);
-    const auto lib_map_opp_2 = get_liberty_map(opp_col, 2);
-    const auto lib_map_own_3 = get_liberty_map(to_play, 3);
-    const auto lib_map_opp_3 = get_liberty_map(opp_col, 3);
-    const auto lib_map_own_4_or_gr = get_liberty_map(to_play, 4, true);
-    const auto lib_map_opp_4_or_gr = get_liberty_map(opp_col, 4, true);
-    for (int i = 0; i < data_size; ++i) {
-        for (int j = 0; j < data_size; ++j) {
-            buf(0, i, j) = mask.at(i, j);
-            buf(1, i, j) = legal_map.at(i, j);
-            buf(2, i, j) = stone_map_own.at(i, j);
-            buf(3, i, j) = stone_map_opp.at(i, j);
-            buf(4, i, j) = hist_map_0.at(i, j);
-            buf(5, i, j) = hist_map_1.at(i, j);
-            buf(6, i, j) = hist_map_2.at(i, j);
-            buf(7, i, j) = hist_map_3.at(i, j);
-            buf(8, i, j) = hist_map_4.at(i, j);
-            buf(9, i, j) = lib_map_own_1.at(i, j);
-            buf(10, i, j) = lib_map_opp_1.at(i, j);
-            buf(11, i, j) = lib_map_own_2.at(i, j);
-            buf(12, i, j) = lib_map_opp_2.at(i, j);
-            buf(13, i, j) = lib_map_own_3.at(i, j);
-            buf(14, i, j) = lib_map_opp_3.at(i, j);
-            buf(15, i, j) = lib_map_own_4_or_gr.at(i, j);
-            buf(16, i, j) = lib_map_opp_4_or_gr.at(i, j);
-        }
-    }
+    // Create numpy array for feature planes
+    auto features_array = py::array_t<float>({data_size, data_size, num_feature_planes});
+    auto features_mu = features_array.mutable_unchecked<3>();
 
-    // Create a 1D array for the scalar features.
-    py::array_t<float> features({num_feature_scalars});
-    auto feat_buf = features.mutable_unchecked<1>();
-    feat_buf(0) = get_komi_from_player_perspective(to_play);
-
-    return py::make_tuple(stacked_maps, features);
-}
-
-# if 0
-void Board::print(PrintMode mode) {
-    printf("   ");
-    if (mode == Default) {
-        printf(" ");
-    }
-    for (int col = 0; col < board_size.x; ++col) {
-        if (mode == Liberties) {
-            printf(" ");
-        }
-        printf("%c ", static_cast<char>(col < 8 ? 'A' + col : 'B' + col));
-    }
-    printf("\n");
-
-    Vec2 root;
-    bool last_move_is_on_board = !(history.empty() || history.back().is_pass);
-    Vec2 last_move_coord = last_move_is_on_board ? history.back().coord : Vec2{-1, -1};
-
-    for (int row = 0; row < board_size.y; ++row) {
-        printf("%2d ", board_size.y - row);
-
-        if (mode == Default) {
-            printf("\033[48;5;94m \033[0m");
-        }
-
-        for (int col = 0; col < board_size.x; ++col) {
-            switch (mode) {
-            case Default:
-                // Shift to accommodate border
-                switch (board[col + padding][row + padding]) {
-                case Empty:
-                    if (col == 0 && row == 0)
-                        printf("\033[48;5;94m\033[38;5;0m┌─\033[0m");
-                    else if (col == board_size.x - 1 && row == 0)
-                        printf("\033[48;5;94m\033[38;5;0m┐ \033[0m");
-                    else if (col == 0 && row == board_size.y - 1)
-                        printf("\033[48;5;94m\033[38;5;0m└─\033[0m");
-                    else if (col == board_size.x - 1 && row == board_size.y - 1)
-                        printf("\033[48;5;94m\033[38;5;0m┘ \033[0m");
-                    else if (col == 0)
-                        printf("\033[48;5;94m\033[38;5;0m├─\033[0m");
-                    else if (col == board_size.x - 1)
-                        printf("\033[48;5;94m\033[38;5;0m┤ \033[0m");
-                    else if (row == 0)
-                        printf("\033[48;5;94m\033[38;5;0m┬─\033[0m");
-                    else if (row == board_size.y - 1)
-                        printf("\033[48;5;94m\033[38;5;0m┴─\033[0m");
-                    else
-                        printf("\033[48;5;94m\033[38;5;0m┼─\033[0m");
-                    break;
-                case Black:
-                    if (last_move_is_on_board && col == last_move_coord.x &&
-                        row == last_move_coord.y) {
-                        printf("\033[48;5;208m\033[38;5;0m● \033[0m");
-                    } else {
-                        printf("\033[48;5;94m\033[38;5;0m● \033[0m");
-                    }
-                    break;
-                case White:
-                    if (last_move_is_on_board && col == last_move_coord.x &&
-                        row == last_move_coord.y) {
-                        printf("\033[48;5;208m\033[38;5;15m● \033[0m");
-                    } else {
-                        printf("\033[48;5;94m\033[38;5;15m● \033[0m");
-                    }
-                    break;
-                }
-                break;
-            case GroupSize:
-                root = find({col + padding, row + padding});
-                if (group[root.x][root.y].size() > 0) {
-                    printf("%2ld ", group[root.x][root.y].size());
-                } else {
-                    printf("   ");
-                }
-                break;
-            case Liberties:
-                root = find({col + padding, row + padding});
-                if (liberties[root.x][root.y].size() > 0) {
-                    printf("%2ld ", liberties[root.x][root.y].size());
-                } else {
-                    printf(" . ");
-                }
-                break;
-            case IllegalMovesBlack:
-            case IllegalMovesWhite:
-                const Move move{mode == IllegalMovesBlack ? Black : White, false, {col, row}};
-                if (board[col + padding][row + padding] == Empty && !is_legal(move)) {
-                    printf("X ");
-                } else {
-                    printf(". ");
-                }
-                break;
+    // Copy feature planes data using mutable_unchecked
+    for (size_t y = 0; y < data_size; ++y) {
+        for (size_t x = 0; x < data_size; ++x) {
+            for (size_t c = 0; c < num_feature_planes; ++c) {
+                features_mu(y, x, c) = feature_planes[y][x][c];
             }
         }
-        printf("\n");
     }
+
+    // Create numpy array for scalar features
+    auto scalars_array = py::array_t<float>({num_feature_scalars});
+
+    // Copy scalar features using memcpy for efficiency
+    auto scalars_mu = scalars_array.mutable_unchecked<1>();
+    std::memcpy(scalars_mu.mutable_data(0), scalar_features.data(),
+                num_feature_scalars * sizeof(float));
+
+    return py::make_tuple(features_array, scalars_array);
 }
-
-void Board::print_feature_planes(Color to_play, int feature_plane_index) {
-    auto nn_input = get_nn_input_data(to_play);
-    auto feature_planes = py::cast<py::array_t<float>>(nn_input[0]);
-    auto feature_plane = feature_planes.mutable_unchecked<3>();
-
-    // Print column headers
-    printf("    ");
-    for (int col = 0; col < data_size; ++col) {
-        if (col >= padding && col < padding + board_size.x) {
-            char col_label = static_cast<char>((col - padding) < 8 ? 'A' + (col - padding)
-                                                                   : 'B' + (col - padding));
-            printf("%c ", col_label);
-        } else {
-            printf("  ");
-        }
-    }
-    printf("\n");
-
-    for (int row = 0; row < data_size; ++row) {
-        if (row >= padding && row < padding + board_size.y) {
-            printf("%2d  ", board_size.y - (row - padding));
-        } else {
-            printf("    ");
-        }
-
-        for (int col = 0; col < data_size; ++col) {
-            float value = feature_plane(feature_plane_index, row, col);
-            bool on_board = (row >= padding && row < padding + board_size.y && col >= padding &&
-                             col < padding + board_size.x);
-
-            const char* bg_color = (value == 1.0f) ? "\033[48;5;14m" :  // Cyan
-                                       (on_board) ? "\033[48;5;94m"
-                                                  :     // Brown
-                                       "\033[48;5;0m";  // Black
-
-            if (on_board) {
-                Color stone = Color(board[col][row]);
-                if (stone == Empty) {
-                    if (col == padding && row == padding)
-                        printf("%s\033[38;5;0m┌─\033[0m", bg_color);
-                    else if (col == padding + board_size.x - 1 && row == padding)
-                        printf("%s\033[38;5;0m┐ \033[0m", bg_color);
-                    else if (col == padding && row == padding + board_size.y - 1)
-                        printf("%s\033[38;5;0m└─\033[0m", bg_color);
-                    else if (col == padding + board_size.x - 1 && row == padding + board_size.y - 1)
-                        printf("%s\033[38;5;0m┘ \033[0m", bg_color);
-                    else if (col == padding)
-                        printf("%s\033[38;5;0m├─\033[0m", bg_color);
-                    else if (col == padding + board_size.x - 1)
-                        printf("%s\033[38;5;0m┤ \033[0m", bg_color);
-                    else if (row == padding)
-                        printf("%s\033[38;5;0m┬─\033[0m", bg_color);
-                    else if (row == padding + board_size.y - 1)
-                        printf("%s\033[38;5;0m┴─\033[0m", bg_color);
-                    else
-                        printf("%s\033[38;5;0m┼─\033[0m", bg_color);
-                } else if (stone == Black) {
-                    printf("%s\033[38;5;0m● \033[0m", bg_color);
-                } else if (stone == White) {
-                    printf("%s\033[38;5;15m● \033[0m", bg_color);
-                }
-            } else {
-                const char* fg_color = (value == 1.0f) ? "\033[38;5;0m" : "\033[38;5;15m";
-                printf("%s%s# \033[0m", bg_color, fg_color);
-            }
-        }
-        printf("\n");
-    }
-}
-#endif
 
 Vec2 Board::find(Vec2 coord) {
-    while (parent[coord.x][coord.y] != coord) {
-        Vec2& coord_parent = parent[coord.x][coord.y];
-        coord_parent = parent[coord_parent.x][coord_parent.y];
+    while (parent[coord.y][coord.x] != coord) {
+        Vec2& coord_parent = parent[coord.y][coord.x];
+        coord_parent = parent[coord_parent.y][coord_parent.x];
         coord = coord_parent;
     }
     return coord;
@@ -576,16 +393,28 @@ void Board::unite(Vec2 a, Vec2 b) {
         return;
     }
 
-    if (group[a.x][a.y].size() < group[b.x][b.y].size()) {
+    if (group[a.y][a.x].size() < group[b.y][b.x].size()) {
         const Vec2 tmp = a;
         a = b;
         b = tmp;
     }
 
-    parent[b.x][b.y] = a;
-    group[a.x][a.y].insert(std::end(group[a.x][a.y]), std::begin(group[b.x][b.y]),
-                           std::end(group[b.x][b.y]));
-    liberties[a.x][a.y].insert(liberties[b.x][b.y].begin(), liberties[b.x][b.y].end());
+    parent[b.y][b.x] = a;
+    group[a.y][a.x].insert(std::end(group[a.y][a.x]), std::begin(group[b.y][b.x]),
+                           std::end(group[b.y][b.x]));
+    liberties[a.y][a.x].insert(liberties[b.y][b.x].begin(), liberties[b.y][b.x].end());
+}
+
+bool Board::any_superko_move(Color to_play) {
+    for (int y = 0; y < board_size.y; ++y) {
+        for (int x = 0; x < board_size.x; ++x) {
+            const auto move_legality = get_move_legality(Move{to_play, false, {x, y}});
+            if (move_legality == Superko) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 }  // namespace go_data_gen

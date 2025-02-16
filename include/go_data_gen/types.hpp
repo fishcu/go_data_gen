@@ -18,15 +18,19 @@ inline Color opposite(Color c) {
 }
 
 struct Vec2 {
-    int x, y;
+    // Coordinate {0, 0} is A19 (top-left corner) in common coordinate display form.
+    int x; // Denotes column (left to right)
+    int y; // Denotes row (top to bottom)
     bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
     bool operator!=(const Vec2& other) const { return !(operator==(other)); }
     bool operator<(const Vec2& other) const {
-        if (x < other.x)
+        if (y < other.y) {
             return true;
-        if (x > other.x)
+        }
+        if (y > other.y) {
             return false;
-        return y < other.y;
+        }
+        return x < other.x;
     }
 };
 

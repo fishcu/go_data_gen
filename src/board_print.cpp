@@ -1,145 +1,114 @@
-#include "go_data_gen/board_print.hpp"
+#include "go_data_gen/board.hpp"
 
 namespace go_data_gen {
 
-void BoardPrinter::print(Board& board, std::optional<int> highlight_feature) {
-    // Get feature planes if required
+void Board::print(std::function<bool(int x, int y)> highlight_fn) {
+    // ANSI color codes
+    const char* const BOARD_BG = "\033[48;5;136m";      // Brown background
+    const char* const HIGHLIGHT_BG = "\033[48;5;179m";  // Light brown background
+    const char* const CYAN_BG = "\033[48;5;51m";        // Cyan background
+    const char* const BLACK_FG = "\033[38;5;0m";        // Black foreground
+    const char* const WHITE_FG = "\033[38;5;15m";       // White foreground
+    const char* const RESET = "\033[0m";                // Reset all colors
+    const char* const OFFBOARD_BG = "\033[48;5;0m";     // Black background for off-board
 
-    // TODO this is broken.
-    // First, refactor NN feature planes to return std::array, which can be better handled here.
-    py::detail::unchecked_mutable_reference<float, 3> feature_plane;
-    if (highlight_feature) {
-        const auto to_play = board.history.empty() ? Black : opposite(board.history.back().color);
-        auto nn_input = board.get_nn_input_data(to_play);
-        auto feature_planes = py::cast<py::array_t<float>>(nn_input[0]);
-        feature_plane = feature_planes.mutable_unchecked<3>();
+    // Get last move coordinates if available
+    bool has_last_move = false;
+    Vec2 last_coord{-1, -1};
+    if (!history.empty() && !history.back().is_pass) {
+        has_last_move = true;
+        last_coord = history.back().coord;
     }
 
-    bool show_padding = highlight_feature.has_value();
-
-    printf("   ");
-    if (!include_padding) {
-        printf(" ");
-    }
-
-    int start = include_padding ? 0 : board.padding;
-    int end = include_padding ? board.data_size : board.padding + board.board_size.x;
-
-    for (int col = start; col < end; ++col) {
-        if (include_padding && !is_on_board(board, board.padding, col)) {
-            printf("  ");
-        } else {
-            int board_col = include_padding ? col - board.padding : col - board.padding;
-            printf("%c ", static_cast<char>(board_col < 8 ? 'A' + board_col : 'B' + board_col));
-        }
+    // Print column coordinates
+    printf("     ");
+    for (int mem_x = padding; mem_x < board_size.x + padding; ++mem_x) {
+        const int x = mem_x - padding;
+        printf("%c ", static_cast<char>(x < 8 ? 'A' + x : 'B' + x));
     }
     printf("\n");
 
-    int start_row = show_padding ? 0 : 0;
-    int end_row = show_padding ? board.data_size : board.board_size.y;
-    int start_col = show_padding ? 0 : 0;
-    int end_col = show_padding ? board.data_size : board.board_size.x;
-
-    for (int row = start_row; row < end_row; ++row) {
-        // Row number
-        if (is_on_board(board, row + board.padding, board.padding)) {
-            printf("%2d ", board.board_size.y - (row));
-        } else if (show_padding) {
-            printf("    ");
+    for (int mem_y = 0; mem_y <= board_size.y + padding; ++mem_y) {
+        const int y = mem_y - padding;
+        if (y >= 0 && y < board_size.y) {
+            printf("%2d ", board_size.y - y);
+        } else {
+            printf("   ");
         }
 
-        // Board margin
-        if (!show_padding) {
-            printf("\033[48;5;94m \033[0m");
-        }
+        for (int mem_x = 0; mem_x <= board_size.x + padding; ++mem_x) {
+            const int x = mem_x - padding;
+            const bool is_last_move = has_last_move && last_coord == Vec2{x, y};
+            const bool is_highlighted = highlight_fn(mem_x, mem_y);
 
-        for (int col = start_col; col < end_col; ++col) {
-            int board_row = row + (show_padding ? 0 : board.padding);
-            int board_col = col + (show_padding ? 0 : board.padding);
-            bool on_board = is_on_board(board, board_row, board_col);
-
-            // Determine background color
-            std::string bg_color;
-            if (feature_plane) {
-                float value = (*feature_plane)(*highlight_feature, board_row, board_col);
-                bg_color = (value == 1.0f) ? "\033[48;5;14m"
-                                           : (on_board ? "\033[48;5;94m" : "\033[48;5;0m");
+            // Select background color
+            if (is_highlighted) {
+                printf("%s", CYAN_BG);
+            } else if (board[mem_y][mem_x] == Color::OffBoard) {
+                printf("%s", OFFBOARD_BG);
             } else {
-                bool is_last_move = !board.history.empty() && !board.history.back().is_pass &&
-                                    col == board.history.back().coord.x &&
-                                    row == board.history.back().coord.y;
-                bg_color = is_last_move ? "\033[48;5;208m" : "\033[48;5;94m";
+                printf("%s", is_last_move ? HIGHLIGHT_BG : BOARD_BG);
             }
 
-            if (on_board) {
-                Color stone = board.board[board_col][board_row];
-                if (stone == Empty) {
-                    const char* symbol;
-                    bool is_edge_row = (row == 0 || row == board.board_size.y - 1);
-                    bool is_edge_col = (col == 0 || col == board.board_size.x - 1);
-
-                    if (col == 0 && row == 0)
-                        symbol = "┌─";
-                    else if (col == board.board_size.x - 1 && row == 0)
-                        symbol = "┐ ";
-                    else if (col == 0 && row == board.board_size.y - 1)
-                        symbol = "└─";
-                    else if (col == board.board_size.x - 1 && row == board.board_size.y - 1)
-                        symbol = "┘ ";
-                    else if (col == 0)
-                        symbol = "├─";
-                    else if (col == board.board_size.x - 1)
-                        symbol = "┤ ";
-                    else if (row == 0)
-                        symbol = "┬─";
-                    else if (row == board.board_size.y - 1)
-                        symbol = "┴─";
-                    else
-                        symbol = "┼─";
-
-                    printf("%s\033[38;5;0m%s\033[0m", bg_color.c_str(), symbol);
-                } else {
-                    std::string fg_color = (stone == Black) ? "\033[38;5;0m" : "\033[38;5;15m";
-                    printf("%s%s● \033[0m", bg_color.c_str(), fg_color.c_str());
-                }
-            } else if (show_padding) {
-                // Print padding area
-                float value = (*feature_plane)(*highlight_feature, board_row, board_col);
-                std::string fg_color = (value == 1.0f) ? "\033[38;5;0m" : "\033[38;5;15m";
-                printf("%s%s# \033[0m", bg_color.c_str(), fg_color.c_str());
+            switch (board[mem_y][mem_x]) {
+            case Color::Empty: {
+                printf("%s", BLACK_FG);
+                if (x == 0 && y == 0)
+                    printf("┌─");
+                else if (x == board_size.x - 1 && y == 0)
+                    printf("┐ ");
+                else if (x == 0 && y == board_size.y - 1)
+                    printf("└─");
+                else if (x == board_size.x - 1 && y == board_size.y - 1)
+                    printf("┘ ");
+                else if (x == 0)
+                    printf("├─");
+                else if (x == board_size.x - 1)
+                    printf("┤ ");
+                else if (y == 0)
+                    printf("┬─");
+                else if (y == board_size.y - 1)
+                    printf("┴─");
+                else
+                    printf("┼─");
+                break;
             }
+            case Color::Black:
+                printf("%s%s ", BLACK_FG, is_last_move ? "◉" : "●");
+                break;
+            case Color::White:
+                printf("%s%s ", WHITE_FG, is_last_move ? "◉" : "●");
+                break;
+            case Color::OffBoard:
+                printf("  ");
+                break;
+            }
+            printf("%s", RESET);
         }
         printf("\n");
     }
 }
 
-void BoardPrinter::print_group_sizes(const Board& board) {
-    for (int row = 0; row < board.board_size.y; ++row) {
-        printf("%2d ", board.board_size.y - row);
-        for (int col = 0; col < board.board_size.x; ++col) {
-            Vec2 root = board.find({col + board.padding, row + board.padding});
-            size_t size = board.group[root.x][root.y].size();
-            printf("%2zu ", size);
+void Board::print_group_sizes() {
+    for (int y = 0; y < board_size.y; ++y) {
+        for (int x = 0; x < board_size.x; ++x) {
+            const auto root = find({x + padding, y + padding});
+            const int size = group[root.y][root.x].size();
+            printf("%2d ", size);
         }
         printf("\n");
     }
 }
 
-void BoardPrinter::print_liberties(const Board& board) {
-    for (int row = 0; row < board.board_size.y; ++row) {
-        printf("%2d ", board.board_size.y - row);
-        for (int col = 0; col < board.board_size.x; ++col) {
-            Vec2 root = board.find({col + board.padding, row + board.padding});
-            size_t libs = board.liberties[root.x][root.y].size();
-            printf("%2zu ", libs);
+void Board::print_liberties() {
+    for (int y = 0; y < board_size.y; ++y) {
+        for (int x = 0; x < board_size.x; ++x) {
+            const auto root = find({x + padding, y + padding});
+            const int libs = liberties[root.y][root.x].size();
+            printf("%2d ", libs);
         }
         printf("\n");
     }
-}
-
-bool BoardPrinter::is_on_board(const Board& board, int row, int col) {
-    return row >= board.padding && row < board.padding + board.board_size.y &&
-           col >= board.padding && col < board.padding + board.board_size.x;
 }
 
 }  // namespace go_data_gen

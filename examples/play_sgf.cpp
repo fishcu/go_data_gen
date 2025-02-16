@@ -32,51 +32,23 @@ int main(int argc, char* argv[]) {
         if (move.is_pass) {
             printf("pass\n");
         } else {
-            printf("(%d, %d)\n", move.coord.x, move.coord.y);
+            printf("(%d, %d)\n", move.coord.x + 1, move.coord.y + 1);
         }
         board.play(move);
         board.print();
 
-        printf("Illegal moves for %s:\n", (opposite(move.color) == Black ? "Black" : "White"));
-        board.print(opposite(move.color) == Black ? Board::PrintMode::IllegalMovesBlack
-                                                  : Board::PrintMode::IllegalMovesWhite);
-
-        printf("Liberty size: \n");
-        board.print(Board::PrintMode::Liberties);
-
-        // Check after 75 moves
-        if (i == 75) {
-            py::tuple nn_input_data = board.get_nn_input_data(opposite(move.color));
-            py::array_t<float> stacked_maps = nn_input_data[0].cast<py::array_t<float>>();
-            py::array_t<float> features = nn_input_data[1].cast<py::array_t<float>>();
-
-            printf("NN Input Data after 75 moves:\n");
-            printf("Stacked Maps:\n");
-
-            // Split the stacked maps into individual 2D maps and print them
-            auto stacked_maps_unchecked = stacked_maps.unchecked<3>();
-            for (py::ssize_t idx = 0; idx < stacked_maps_unchecked.shape(0); ++idx) {
-                printf("Map %ld:\n", idx);
-                for (py::ssize_t row = 0; row < stacked_maps_unchecked.shape(1); ++row) {
-                    for (py::ssize_t col = 0; col < stacked_maps_unchecked.shape(2); ++col) {
-                        printf("%2d ", static_cast<int>(stacked_maps_unchecked(idx, row, col)));
-                    }
-                    printf("\n");
-                }
-                printf("\n");
+        // Check after some moves
+        if (i >= 180 && i <= 183) {
+            printf("NN Input Data after %d moves:\n", i);
+            const auto feature_planes = board.get_feature_planes(opposite(move.color));
+            assert(feature_planes[0][0].size() == board.num_feature_planes);
+            for (int c = 0; c < board.num_feature_planes; ++c) {
+                printf("Feature plane %d: \n", c);
+                board.print([&feature_planes, c](int x, int y) {
+                    return static_cast<bool>(feature_planes[y][x][c]);
+                });
             }
-
-            printf("Features:\n");
-            // Print the features
-            auto features_unchecked = features.unchecked<1>();
-            for (py::ssize_t i = 0; i < features_unchecked.shape(0); ++i) {
-                printf("%f ", features_unchecked(i));
-            }
-            printf("\n\n");
         }
-
-        printf("Feature plane 15:\n");
-        board.print_feature_planes(opposite(move.color), 15);
 
         ++i;
     }

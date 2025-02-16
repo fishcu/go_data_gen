@@ -34,28 +34,22 @@ public:
     void setup_move(Move move);
 
     MoveLegality get_move_legality(Move move);
-    bool is_legal(Move move);
 
     void play(Move move);
 
-    pybind11::array_t<float> get_mask();
-    pybind11::array_t<float> get_legal_map(Color color);
-    pybind11::array_t<float> get_stone_map(Color color);
-    pybind11::array_t<float> get_history_map(int dist);
-    pybind11::array_t<float> get_liberty_map(Color color, int num, bool or_greater = false);
+    static constexpr int num_feature_planes = 18;
+    using StackedFeaturePlanes =
+        std::array<std::array<std::array<float, num_feature_planes>, data_size>, data_size>;
+    StackedFeaturePlanes get_feature_planes(Color to_play);
 
-    float get_komi_from_player_perspective(Color to_play);
+    static constexpr int num_feature_scalars = 7;
+    using FeatureVector = std::array<float, num_feature_scalars>;
+    FeatureVector get_scalar_features(Color to_play);
 
-    // Gets all relevant NN input data in one function, calling all of the above.
-    // Returns a tuple of tensors:
-    // The first tensor contains the stacked feature maps.
-    // The second tensor is a vector of scalar features.
-    static constexpr int num_feature_planes = 17;
-    static constexpr int num_feature_scalars = 1;
+    // Tuple of stacked feature planes and scalar features
     pybind11::tuple get_nn_input_data(Color to_play);
 
-    friend class BoardPrinter;
-    void print(std::optional<int> highlight_feature = std::nullopt);
+    void print(std::function<bool(int x, int y)> highlight_fn = [](int, int) { return false; });
     void print_group_sizes();
     void print_liberties();
 
@@ -75,8 +69,7 @@ private:
     uint64_t zobrist;
     std::set<uint64_t> zobrist_history;
 
-    // Common function for all get_*_map functions
-    pybind11::array_t<float> get_map(std::function<bool(int, int)> condition);
+    bool any_superko_move(Color to_play);
 };
 
 }  // namespace go_data_gen
