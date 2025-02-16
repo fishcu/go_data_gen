@@ -80,7 +80,11 @@ void Board::print(std::function<bool(int x, int y)> highlight_fn) {
                 printf("%s%s ", WHITE_FG, is_last_move ? "◉" : "●");
                 break;
             case Color::OffBoard:
-                printf("  ");
+                if (mem_x == 0 && y >= 0 && y < board_size.y) {
+                    printf(" %s%s▕", OFFBOARD_BG, "\033[38;5;136m");
+                } else {
+                    printf("  ");
+                }
                 break;
             }
             printf("%s", RESET);
