@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <random>
+#include <sstream>
 
 #include "go_data_gen/types.hpp"
 
@@ -187,8 +188,21 @@ MoveLegality Board::get_move_legality(Move move) {
 }
 
 void Board::play(Move move) {
-    assert(move.color == Black || move.color == White);
-    assert(get_move_legality(move) == Legal);
+    // assert(get_move_legality(move) == Legal);
+    const auto legality = get_move_legality(move);
+    if (legality != Legal) {
+        // printf("Illegal move detected: %s ", move.color == Black ? "Black" : "White");
+        // if (move.is_pass) {
+        //     printf("pass\n");
+        // } else {
+        //     printf("(%d, %d)\n", move.coord.x, move.coord.y);
+        // }
+        // print([&move](int mem_x, int mem_y) {
+        //     return !move.is_pass && mem_x == move.coord.x + padding &&
+        //            mem_y == move.coord.y + padding;
+        // });
+        throw std::runtime_error("Illegal move");
+    }
 
     history.push_back(move);
 
