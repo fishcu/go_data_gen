@@ -23,6 +23,12 @@ Installation with `pip`:
 pip install .
 ```
 
+Debug build:
+
+```sh
+DEBUG_BUILD=1 pip install .
+```
+
 ## Usage
 
 See `examples/play_sgf.cpp` and `examples/play_sgf.py`.
