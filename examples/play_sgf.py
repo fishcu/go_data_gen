@@ -19,7 +19,7 @@ def main():
         if move.is_pass:
             print("pass")
         else:
-            print(f"({move.coord[0]}, {move.coord[1]})")
+            print(f"({move.coord.x}, {move.coord.y})")
 
         board.play(move)
         board.print()

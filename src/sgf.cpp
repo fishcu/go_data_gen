@@ -117,16 +117,16 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
 
     const std::string result_str = result_match[1].str();
     if (result_str == "B+R") {
-        result = -1.0f;  // Black wins by resignation
+        result = 1000.0f;  // Black wins by resignation
     } else if (result_str == "W+R") {
-        result = 1.0f;  // White wins by resignation
+        result = -1000.0f;  // White wins by resignation
     } else if (result_str == "0" || result_str == "Void") {
         result = 0.0f;  // Draw or void game
     } else {
         // Parse score for B+<score> or W+<score>
         const char winner = result_str[0];
         const float score = std::stof(result_str.substr(2));
-        result = (winner == 'W' ? 1.0f : -1.0f) * score;
+        result = (winner == 'W' ? -1.0f : 1.0f) * score;
     }
 }
 

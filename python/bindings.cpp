@@ -12,33 +12,6 @@ namespace py = pybind11;
 
 using namespace go_data_gen;
 
-namespace pybind11 {
-namespace detail {
-template <>
-struct type_caster<Vec2> {
-public:
-    PYBIND11_TYPE_CASTER(Vec2, _("Vec2"));
-
-    // Conversion part 1 (Python -> C++)
-    bool load(handle src, bool) {
-        if (!py::isinstance<py::tuple>(src))
-            return false;
-        auto tuple = src.cast<py::tuple>();
-        if (tuple.size() != 2)
-            return false;
-        value.x = tuple[0].cast<int>();
-        value.y = tuple[1].cast<int>();
-        return true;
-    }
-
-    // Conversion part 2 (C++ -> Python)
-    static handle cast(Vec2 src, return_value_policy, handle) {
-        return py::make_tuple(src.x, src.y).release();
-    }
-};
-}  // namespace detail
-}  // namespace pybind11
-
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
 
@@ -47,6 +20,15 @@ PYBIND11_MODULE(go_data_gen, m) {
         .value("Black", Black)
         .value("White", White)
         .value("OffBoard", OffBoard);
+
+    py::class_<Vec2>(m, "Vec2")
+        .def(py::init<>())
+        .def(py::init<int, int>(), py::arg("x"), py::arg("y"))
+        .def_readwrite("x", &Vec2::x)
+        .def_readwrite("y", &Vec2::y)
+        .def("__eq__", &Vec2::operator==)
+        .def("__ne__", &Vec2::operator!=)
+        .def("__lt__", &Vec2::operator<);
 
     m.def("opposite", &opposite, "Get the opposite color", py::arg("color"));
 
@@ -87,7 +69,6 @@ PYBIND11_MODULE(go_data_gen, m) {
                          }
                      }
                  }
-
                  return features_array;
              })
         .def_readonly_static("num_feature_scalars", &Board::num_feature_scalars)
