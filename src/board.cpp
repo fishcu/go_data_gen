@@ -1,10 +1,9 @@
 #include "go_data_gen/board.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <random>
 #include <sstream>
-
-#include "go_data_gen/types.hpp"
 
 #define FOR_EACH_NEIGHBOR(coord, n_coord, func) \
     (n_coord) = {coord.x - 1, coord.y};         \
@@ -18,8 +17,10 @@
 
 namespace {
 
-uint64_t
-    zobrist_hashes[go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 2];
+// +1 for color to play for situational superko
+static constexpr size_t zobrist_hashes_size =
+    go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 2 + 1;
+uint64_t zobrist_hashes[zobrist_hashes_size];
 
 void init_zobrist() {
     static bool initialized = false;
@@ -27,7 +28,7 @@ void init_zobrist() {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint64_t> dis(0, std::numeric_limits<uint64_t>::max());
-        for (size_t i = 0; i < sizeof(zobrist_hashes) / sizeof(uint64_t); ++i) {
+        for (size_t i = 0; i < zobrist_hashes_size; ++i) {
             zobrist_hashes[i] = dis(gen);
         }
         initialized = true;
@@ -42,16 +43,18 @@ uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Co
                           (mem_coord.x + mem_coord.y * go_data_gen::Board::max_board_size) * 2];
 }
 
+uint64_t color_to_zobrist(go_data_gen::Color color) {
+    return color == go_data_gen::Color::Black ? 0 : zobrist_hashes[zobrist_hashes_size - 1];
+}
+
 }  // namespace
 
 namespace go_data_gen {
 
-Board::Board(Vec2 _board_size, float _komi) : board_size{_board_size}, komi{_komi} {
+Board::Board(Vec2 _board_size, float _komi, Ruleset _ruleset)
+    : board_size{_board_size}, komi{_komi}, ruleset{_ruleset} {
     assert(board_size.x <= max_board_size && board_size.y <= max_board_size &&
            "Maximum size exceeded");
-
-    // PythonEnvironment::instance();  // Ensures Python is initialized
-
     init_zobrist();
     reset();
 }
@@ -59,10 +62,10 @@ Board::Board(Vec2 _board_size, float _komi) : board_size{_board_size}, komi{_kom
 void Board::reset() {
     for (int y = 0; y < data_size; ++y) {
         for (int x = 0; x < data_size; ++x) {
-            board[y][x] = char(OffBoard);
+            board[y][x] = static_cast<char>(OffBoard);
             if (y >= padding && x >= padding && y < padding + board_size.y &&
                 x < padding + board_size.x) {
-                board[y][x] = Empty;
+                board[y][x] = static_cast<char>(Empty);
             }
 
             parent[y][x] = {x, y};
@@ -72,7 +75,12 @@ void Board::reset() {
     }
     history.clear();
     zobrist = 0;
-    zobrist_history = std::set<uint64_t>{zobrist};
+    if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
+        // On an empty board, black gets to play first.
+        zobrist_history = std::vector<uint64_t>{zobrist ^ color_to_zobrist(Black)};
+    } else {
+        zobrist_history = std::vector<uint64_t>{zobrist};
+    }
 }
 
 void Board::setup_move(Move move) {
@@ -82,7 +90,7 @@ void Board::setup_move(Move move) {
     // Shift coordinate to account for padding of data fields.
     const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
-    board[mem_coord.y][mem_coord.x] = move.color;
+    board[mem_coord.y][mem_coord.x] = static_cast<char>(move.color);
 
     if (move.color == Black || move.color == White) {
         // Initialize new group
@@ -95,179 +103,229 @@ void Board::setup_move(Move move) {
     Vec2 neighbor, root;
 
     // Update liberties and connect groups
+    Color neighbor_color;
     FOR_EACH_NEIGHBOR(
-        mem_coord, neighbor,
+        mem_coord, neighbor,  //
+        neighbor_color = static_cast<Color>(board[neighbor.y][neighbor.x]);
         if (move.color == Empty) {
-            if (board[neighbor.y][neighbor.x] == Black || board[neighbor.y][neighbor.x] == White) {
+            if (neighbor_color == Black || neighbor_color == White) {
                 root = find(neighbor);
                 liberties[root.y][root.x].insert(mem_coord);
             }
         } else {
             const auto opp_col = opposite(move.color);
-            if (board[neighbor.y][neighbor.x] == Empty) {
+            if (neighbor_color == Empty) {
                 root = find(mem_coord);
                 liberties[root.y][root.x].insert(neighbor);
-            } else if (board[neighbor.y][neighbor.x] == move.color) {
+            } else if (neighbor_color == move.color) {
                 root = find(neighbor);
                 liberties[root.y][root.x].erase(mem_coord);
                 unite(mem_coord, neighbor);
-            } else if (board[neighbor.y][neighbor.x] == opp_col) {
+            } else if (neighbor_color == opp_col) {
                 root = find(neighbor);
                 liberties[root.y][root.x].erase(mem_coord);
             }
-        }
-
+        }  //
     )
+
+    // Assert setup move is not suicidal
+    assert(move.color == Empty || liberties[find(mem_coord).y][find(mem_coord).x].size() > 0);
 }
 
 MoveLegality Board::get_move_legality(Move move) {
     assert(move.color == Black || move.color == White);
+    assert(history.empty() || move.color == opposite(history.back().color));
 
     if (move.is_pass) {
-        return Legal;
+        return MoveLegality::Legal;
     }
 
     // Shift coordinate to account for padding of data fields.
     const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
     // Board must be empty
-    if (board[mem_coord.y][mem_coord.x] != Empty) {
-        return NonEmpty;
+    if (static_cast<Color>(board[mem_coord.y][mem_coord.x]) != Empty) {
+        return MoveLegality::NonEmpty;
     }
 
-    // Simulate playing stone
-    const auto opp_col = opposite(move.color);
-    auto new_zobrist = zobrist ^ mem_coord_color_to_zobrist(mem_coord, move.color);
+    auto new_zobrist = zobrist;
 
-    Vec2 neighbor, root;
+    const auto opp_col = opposite(move.color);
+
+    if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
+        // Simulate switching color-to-play.
+        new_zobrist ^= color_to_zobrist(move.color);
+        new_zobrist ^= color_to_zobrist(opp_col);
+    }
+
+    // Simulate playing stone.
+    new_zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
 
     // Figure out liberties and captured groups
     // We need to do it in two passes to avoid simulating a removal of the same group multiple times
     // with even parity, which would cancel out the zobrist hash changes.
-    std::set<Vec2> added_liberties;
+    std::set<Vec2> resulting_liberties;
     std::set<Vec2> captures;
+    bool connects_to_own_group = false;
+    Vec2 neighbor, root;
+    Color neighbor_color;
     FOR_EACH_NEIGHBOR(
-        mem_coord, neighbor,
-        if (board[neighbor.y][neighbor.x] == Empty) {
-            added_liberties.insert(neighbor);
-        } else if (board[neighbor.y][neighbor.x] == move.color) {
+        mem_coord, neighbor,  //
+        neighbor_color = static_cast<Color>(board[neighbor.y][neighbor.x]);
+        if (neighbor_color == Empty) {
+            resulting_liberties.insert(neighbor);
+        } else if (neighbor_color == move.color) {
+            connects_to_own_group = true;
             root = find(neighbor);
-            added_liberties.insert(liberties[root.y][root.x].begin(),
-                                   liberties[root.y][root.x].end());
-        } else if (board[neighbor.y][neighbor.x] == opp_col) {
+            resulting_liberties.insert(liberties[root.y][root.x].begin(),
+                                       liberties[root.y][root.x].end());
+        } else if (neighbor_color == opp_col) {
             root = find(neighbor);
             if (liberties[root.y][root.x].size() == 1) {
                 captures.insert(root);
             }
-        })
+        }  //
+    )
 
-    // Must not be suicide
+    // Check for suicide
     if (captures.empty()) {
         // Account for this move stealing last liberty of neighboring group without adding any
-        added_liberties.erase(mem_coord);
-        if (added_liberties.empty()) {
-            // assert(false);
-            return Suicidal;
+        resulting_liberties.erase(mem_coord);
+        // If suicide is disallowed or if move would be single-stone suicide, move is illegal.
+        if (resulting_liberties.empty() &&
+            (ruleset.suicide_rule == SuicideRule::Disallowed || !connects_to_own_group)) {
+            return MoveLegality::Suicidal;
         }
+        // If suicidal move is legal, simulate removing group
+        captures.insert(find(mem_coord));
     }
 
     // Calculate zobrist if captured groups are removed
     for (auto capture : captures) {
         for (auto stone : group[capture.y][capture.x]) {
-            new_zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
+            new_zobrist ^=
+                mem_coord_color_to_zobrist(stone, static_cast<Color>(board[stone.y][stone.x]));
         }
     }
 
-    // Must not be superko
-    if (zobrist_history.find(new_zobrist) != zobrist_history.end()) {
-        // assert(false);
-        return Superko;
+    // Check for ko
+    if (ruleset.ko_rule == KoRule::Simple) {
+        // Simple ko: Move would repeat state two moves ago.
+        if (zobrist_history.size() > 1 && new_zobrist == zobrist_history.rbegin()[1]) {
+            return MoveLegality::Ko;
+        }
+    } else {
+        // Superko: Move would repeat any previous board state.
+        if (std::find(zobrist_history.begin(), zobrist_history.end(), new_zobrist) !=
+            zobrist_history.end()) {
+            return MoveLegality::Ko;
+        }
     }
 
-    return Legal;
+    return MoveLegality::Legal;
 }
 
 void Board::play(Move move) {
     // assert(get_move_legality(move) == Legal);
     const auto legality = get_move_legality(move);
-    if (legality != Legal) {
-        // printf("Illegal move detected: %s ", move.color == Black ? "Black" : "White");
-        // if (move.is_pass) {
-        //     printf("pass\n");
-        // } else {
-        //     printf("(%d, %d)\n", move.coord.x, move.coord.y);
-        // }
-        // print([&move](int mem_x, int mem_y) {
-        //     return !move.is_pass && mem_x == move.coord.x + padding &&
-        //            mem_y == move.coord.y + padding;
-        // });
+    if (legality != MoveLegality::Legal) {
+        printf("Illegal move detected: %s ", move.color == Black ? "Black" : "White");
+        if (move.is_pass) {
+            printf("pass\n");
+        } else {
+            printf("(%d, %d)\n", move.coord.x, move.coord.y);
+        }
+        print([&move](int mem_x, int mem_y) {
+            return !move.is_pass && mem_x == move.coord.x + padding &&
+                   mem_y == move.coord.y + padding;
+        });
         throw std::runtime_error("Illegal move");
     }
 
-    history.push_back(move);
+    const auto opp_col = opposite(move.color);
+    if (!move.is_pass) {
+        // Shift coordinate to account for padding of data fields.
+        const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
-    if (move.is_pass) {
-        return;
+        // Even though this move may turn out to be suicidal, we update the board and zobrist
+        // immediately to reduce branching.
+        board[mem_coord.y][mem_coord.x] = static_cast<char>(move.color);
+        zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
+
+        // Initialize new group
+        parent[mem_coord.y][mem_coord.x] = mem_coord;
+        group[mem_coord.y][mem_coord.x].clear();
+        group[mem_coord.y][mem_coord.x].push_back(mem_coord);
+        liberties[mem_coord.y][mem_coord.x].clear();
+
+        // Add liberties, connect to own groups, and figure out captured groups
+        std::set<Vec2> captures;
+        Vec2 neighbor, root;
+        Color neighbor_color;
+        FOR_EACH_NEIGHBOR(
+            mem_coord, neighbor,  //
+            neighbor_color = static_cast<Color>(board[neighbor.y][neighbor.x]);
+            if (neighbor_color == Empty) {
+                root = find(mem_coord);
+                liberties[root.y][root.x].insert(neighbor);
+            } else if (neighbor_color == move.color) {
+                root = find(neighbor);
+                liberties[root.y][root.x].erase(mem_coord);
+                unite(mem_coord, neighbor);
+            } else if (neighbor_color == opp_col) {
+                root = find(neighbor);
+                liberties[root.y][root.x].erase(mem_coord);
+                if (liberties[root.y][root.x].size() == 0) {
+                    captures.insert(root);
+                }
+            }  //
+        )
+
+        // Handle suicide
+        if (captures.empty()) {
+            root = find(mem_coord);
+            if (liberties[root.y][root.x].empty()) {
+                captures.insert(root);
+            }
+        }
+
+        // Handle captures
+        for (auto capture : captures) {
+            for (auto stone : group[capture.y][capture.x]) {
+                const auto removed_color = static_cast<Color>(board[stone.y][stone.x]);
+                const auto opp_rem_col = opposite(removed_color);
+                zobrist ^= mem_coord_color_to_zobrist(stone, removed_color);
+                board[stone.y][stone.x] = static_cast<char>(Empty);
+                FOR_EACH_NEIGHBOR(
+                    stone, neighbor,  //
+                    neighbor_color = static_cast<Color>(board[neighbor.y][neighbor.x]);
+                    if (neighbor_color == opp_rem_col) {
+                        // Capturing a group frees liberties for the opposite color.
+                        root = find(neighbor);
+                        liberties[root.y][root.x].insert(stone);
+                    }  //
+                )
+#ifndef NDEBUG
+                // We don't need to maintain other data structures here.
+                // For debugging, clean up anyway.
+                parent[stone.y][stone.x].x = stone.x;
+                parent[stone.y][stone.x].y = stone.y;
+                group[stone.y][stone.x].clear();
+                liberties[stone.y][stone.x].clear();
+#endif
+            }
+        }
+
+        if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
+            zobrist_history.push_back(zobrist ^ color_to_zobrist(opp_col));
+        } else {
+            zobrist_history.push_back(zobrist);
+        }
+        assert(std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() ==
+               zobrist_history.size());  // Assert no duplicates
     }
 
-    // Shift coordinate to account for padding of data fields.
-    const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
-
-    const auto opp_col = opposite(move.color);
-
-    board[mem_coord.y][mem_coord.x] = move.color;
-
-    // Initialize new group
-    parent[mem_coord.y][mem_coord.x] = mem_coord;
-    group[mem_coord.y][mem_coord.x].clear();
-    group[mem_coord.y][mem_coord.x].push_back(mem_coord);
-    liberties[mem_coord.y][mem_coord.x].clear();
-
-    Vec2 neighbor, root, root2;
-
-    // Add liberties, connect to own groups, and figure out captured groups
-    FOR_EACH_NEIGHBOR(
-        mem_coord, neighbor,
-        if (board[neighbor.y][neighbor.x] == Empty) {
-            root = find(mem_coord);
-            liberties[root.y][root.x].insert(neighbor);
-        } else if (board[neighbor.y][neighbor.x] == move.color) {
-            root = find(neighbor);
-            liberties[root.y][root.x].erase(mem_coord);
-            unite(mem_coord, neighbor);
-        } else if (board[neighbor.y][neighbor.x] == opp_col) {
-            root = find(neighbor);
-            liberties[root.y][root.x].erase(mem_coord);
-            if (liberties[root.y][root.x].size() == 0) {
-                // Group is captured
-                for (auto stone : group[root.y][root.x]) {
-                    board[stone.y][stone.x] = Empty;
-                    zobrist ^= mem_coord_color_to_zobrist(stone, opp_col);
-                    // Nested macros, now we're entering the danger zone
-                    FOR_EACH_NEIGHBOR(
-                        stone, neighbor,
-                        // The opposite of the opposite of the move color is the move color.
-                        if (board[neighbor.y][neighbor.x] == move.color) {
-                            // Capturing a group of the opposite color frees liberties for the move
-                            // color.
-                            root2 = find(neighbor);  // Use root2 to avoid issues with outer loop
-                            liberties[root2.y][root2.x].insert(stone);
-                        })
-#ifndef NDEBUG
-                    // We don't need to maintain other data structures here.
-                    // For debugging, clean up anyway.
-                    parent[stone.y][stone.x].x = stone.x;
-                    parent[stone.y][stone.x].y = stone.y;
-                    group[stone.y][stone.x].clear();
-                    liberties[stone.y][stone.x].clear();
-#endif
-                }
-            }
-        })
-
-    // Update zobrist hash
-    zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
-    zobrist_history.insert(zobrist);
+    history.push_back(move);
 }
 
 Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
@@ -288,22 +346,23 @@ Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
                 get_move_legality(Move{to_play, false, {x - padding, y - padding}});
 
             // Legal to play
-            result[y][x][0] = static_cast<float>(move_legality == Legal);
+            result[y][x][0] = static_cast<float>(move_legality == MoveLegality::Legal);
             // Own color
-            result[y][x][1] = static_cast<float>(board[y][x] == to_play);
+            result[y][x][1] = static_cast<float>(static_cast<Color>(board[y][x]) == to_play);
             // Opponent color
-            result[y][x][2] = static_cast<float>(board[y][x] == opp_col);
+            result[y][x][2] = static_cast<float>(static_cast<Color>(board[y][x]) == opp_col);
             // Is on-board
-            result[y][x][3] = static_cast<float>(board[y][x] != OffBoard);
+            result[y][x][3] = static_cast<float>(static_cast<Color>(board[y][x]) != OffBoard);
 
-            // Mark superko
-            result[y][x][4] = static_cast<float>(move_legality == Superko);
+            // Mark ko / superko
+            result[y][x][4] = static_cast<float>(move_legality == MoveLegality::Ko);
 
             // Liberties of own and opponent groups
-            if (board[y][x] == Black || board[y][x] == White) {
+            if (static_cast<Color>(board[y][x]) == Black ||
+                static_cast<Color>(board[y][x]) == White) {
                 const auto root = find(Vec2{x, y});
                 const int num_libs = liberties[root.y][root.x].size();
-                if (board[y][x] == to_play) {
+                if (static_cast<Color>(board[y][x]) == to_play) {
                     result[y][x][num_planes_before_lib_planes + std::min(num_libs, num_lib_planes) -
                                  1] = 1.0;
                 } else {
@@ -343,7 +402,7 @@ Board::FeatureVector Board::get_feature_scalars(Color to_play) {
     result[0] = (to_play == White ? komi : -komi) / 15.0;
 
     // There is a superko move
-    result[1] = static_cast<float>(any_superko_move(to_play));
+    result[1] = static_cast<float>(any_ko_move(to_play));
 
     // N-last move was pass
     for (int dist = 0; dist < num_pass_features; ++dist) {
@@ -385,11 +444,11 @@ void Board::unite(Vec2 a, Vec2 b) {
     liberties[a.y][a.x].insert(liberties[b.y][b.x].begin(), liberties[b.y][b.x].end());
 }
 
-bool Board::any_superko_move(Color to_play) {
+bool Board::any_ko_move(Color to_play) {
     for (int y = 0; y < board_size.y; ++y) {
         for (int x = 0; x < board_size.x; ++x) {
             const auto move_legality = get_move_legality(Move{to_play, false, {x, y}});
-            if (move_legality == Superko) {
+            if (move_legality == MoveLegality::Ko) {
                 return true;
             }
         }

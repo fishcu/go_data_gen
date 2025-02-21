@@ -5,6 +5,7 @@
 
 namespace go_data_gen {
 
+// Use enum instead of enum class for straightforward conversions to/from char.
 enum Color {
     Empty = 0,
     Black = 1,
@@ -19,8 +20,8 @@ inline Color opposite(Color c) {
 
 struct Vec2 {
     // Coordinate {0, 0} is A19 (top-left corner) in common coordinate display form.
-    int x; // Denotes column (left to right)
-    int y; // Denotes row (top to bottom)
+    int x;  // Denotes column (left to right)
+    int y;  // Denotes row (top to bottom)
     bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
     bool operator!=(const Vec2& other) const { return !(operator==(other)); }
     bool operator<(const Vec2& other) const {
@@ -51,11 +52,11 @@ struct Move {
     bool operator!=(const Move& other) const { return !(operator==(other)); }
 };
 
-enum MoveLegality {
+enum class MoveLegality {
     Legal = 0,
     NonEmpty = 1,
     Suicidal = 2,
-    Superko = 3,
+    Ko = 3,  // Superko or ko
 };
 
 }  // namespace go_data_gen

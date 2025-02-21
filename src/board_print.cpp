@@ -44,14 +44,14 @@ void Board::print(std::function<bool(int x, int y)> highlight_fn) {
             // Select background color
             if (is_highlighted) {
                 printf("%s", CYAN_BG);
-            } else if (board[mem_y][mem_x] == Color::OffBoard) {
+            } else if (static_cast<Color>(board[mem_y][mem_x]) == OffBoard) {
                 printf("%s", OFFBOARD_BG);
             } else {
                 printf("%s", is_last_move ? HIGHLIGHT_BG : BOARD_BG);
             }
 
-            switch (board[mem_y][mem_x]) {
-            case Color::Empty: {
+            switch (static_cast<Color>(board[mem_y][mem_x])) {
+            case Empty: {
                 printf("%s", BLACK_FG);
                 if (x == 0 && y == 0)
                     printf("┌─");
@@ -73,13 +73,13 @@ void Board::print(std::function<bool(int x, int y)> highlight_fn) {
                     printf("┼─");
                 break;
             }
-            case Color::Black:
+            case Black:
                 printf("%s%s ", BLACK_FG, is_last_move ? "◉" : "●");
                 break;
-            case Color::White:
+            case White:
                 printf("%s%s ", WHITE_FG, is_last_move ? "◉" : "●");
                 break;
-            case Color::OffBoard:
+            case OffBoard:
                 if (mem_x == 0 && y >= 0 && y < board_size.y) {
                     printf(" %s%s▕", OFFBOARD_BG, "\033[38;5;136m");
                 } else {

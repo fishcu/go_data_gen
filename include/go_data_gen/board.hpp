@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "rules.hpp"
 #include "types.hpp"
 
 namespace go_data_gen {
@@ -15,7 +16,7 @@ public:
     static constexpr int padding = 1;
     static constexpr int data_size = max_board_size + 2 * padding;
 
-    Board(Vec2 board_size = {19, 19}, float komi = 7.5);
+    Board(Vec2 board_size = {19, 19}, float komi = 7.5, Ruleset ruleset = TrompTaylorRules);
 
     ~Board() = default;
 
@@ -24,11 +25,12 @@ public:
     void reset();
     // Used for handicap and setup moves.
     // Does not handle legality checks or captures.
-    // Does not influence superko.
+    // Does not influence (super)ko.
     // Does not get recorded history.
     // Allows for "Empty" moves, meaning it erases stones from the board.
     void setup_move(Move move);
 
+    Ruleset ruleset;
     MoveLegality get_move_legality(Move move);
 
     void play(Move move);
@@ -50,8 +52,6 @@ private:
     char board[data_size][data_size];
     Vec2 board_size;
 
-    std::vector<Move> history;
-
     Vec2 parent[data_size][data_size];
     std::vector<Vec2> group[data_size][data_size];
     std::set<Vec2> liberties[data_size][data_size];
@@ -59,10 +59,11 @@ private:
     Vec2 find(Vec2 coord);
     void unite(Vec2 a, Vec2 b);
 
+    std::vector<Move> history;
     uint64_t zobrist;
-    std::set<uint64_t> zobrist_history;
+    std::vector<uint64_t> zobrist_history;
 
-    bool any_superko_move(Color to_play);
+    bool any_ko_move(Color to_play);
 };
 
 }  // namespace go_data_gen

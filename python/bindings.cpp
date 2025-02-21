@@ -42,7 +42,7 @@ PYBIND11_MODULE(go_data_gen, m) {
         .value("Legal", MoveLegality::Legal)
         .value("NonEmpty", MoveLegality::NonEmpty)
         .value("Suicidal", MoveLegality::Suicidal)
-        .value("Superko", MoveLegality::Superko);
+        .value("Ko", MoveLegality::Ko);
 
     py::class_<Board>(m, "Board")
         .def_readonly_static("max_board_size", &Board::max_board_size)
