@@ -31,6 +31,12 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     assert(size_x <= Board::max_board_size && size_y <= Board::max_board_size &&
            "Maximum size exceeded");
 
+    // Extract handicap stones
+    const std::regex handicap_regex(R"(HA\[(\d+)\])");
+    std::smatch handicap_match;
+    const bool handicap_found = std::regex_search(content, handicap_match, handicap_regex);
+    const int num_handicap_stones = handicap_found ? std::stoi(handicap_match[1]) : 0;
+
     // Extract komi
     const std::regex komi_regex(R"(KM\[(-?\d+(?:\.\d+)?)\])");
     std::smatch komi_match;
@@ -38,7 +44,58 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     assert(komi_found && "Komi not found in the SGF file");
     const double komi = std::stod(komi_match[1]);
 
-    board = Board(Vec2{size_x, size_y}, komi);
+    // Extract ruleset
+    const std::regex ruleset_regex(R"(RU\[([^\]]+)\])");
+    std::smatch ruleset_match;
+    const bool ruleset_found = std::regex_search(content, ruleset_match, ruleset_regex);
+    assert(ruleset_found && "Ruleset not found in the SGF file");
+
+    const std::string rules_str = ruleset_match[1];
+    Ruleset ruleset;
+
+    // Parse ko rule
+    if (rules_str.find("koPOSITIONAL") != std::string::npos) {
+        ruleset.ko_rule = KoRule::PositionalSuperko;
+    } else if (rules_str.find("koSITUATIONAL") != std::string::npos) {
+        ruleset.ko_rule = KoRule::SituationalSuperko;
+    } else {
+        ruleset.ko_rule = KoRule::Simple;
+    }
+
+    // Parse suicide rule
+    if (rules_str.find("sui1") != std::string::npos) {
+        ruleset.suicide_rule = SuicideRule::Allowed;
+    } else {
+        ruleset.suicide_rule = SuicideRule::Disallowed;
+    }
+
+    // Parse scoring rule
+    if (rules_str.find("scoreAREA") != std::string::npos) {
+        ruleset.scoring_rule = ScoringRule::Area;
+    } else {
+        ruleset.scoring_rule = ScoringRule::Territory;
+    }
+
+    // Parse tax rule
+    if (rules_str.find("taxALL") != std::string::npos) {
+        ruleset.tax_rule = TaxRule::All;
+    } else if (rules_str.find("taxSEKI") != std::string::npos) {
+        ruleset.tax_rule = TaxRule::Seki;
+    } else {
+        ruleset.tax_rule = TaxRule::NoTax;
+    }
+
+    // Parse button (first player pass bonus) rule
+    if (rules_str.find("button1") != std::string::npos) {
+        ruleset.first_person_pass_bonus_rule = FirstPersonPassBonusRule::Bonus;
+    } else {
+        ruleset.first_person_pass_bonus_rule = FirstPersonPassBonusRule::NoBonus;
+    }
+
+    // Default to no white handicap bonus
+    ruleset.white_handicap_bonus_rule = WhiteHandicapBonusRule::NoBonus;
+
+    board = Board(Vec2{size_x, size_y}, komi, ruleset, num_handicap_stones);
 
     const std::sregex_iterator end;
 

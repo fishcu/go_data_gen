@@ -16,11 +16,13 @@ public:
     static constexpr int padding = 1;
     static constexpr int data_size = max_board_size + 2 * padding;
 
-    Board(Vec2 board_size = {19, 19}, float komi = 7.5, Ruleset ruleset = TrompTaylorRules);
+    Board(Vec2 board_size = {19, 19}, float komi = 7.5, Ruleset ruleset = TrompTaylorRules,
+          int num_handicap_stones = 0);
 
     ~Board() = default;
 
     float komi;
+    int num_handicap_stones;  // important for counting in some rulesets
 
     void reset();
     // Used for handicap and setup moves.
@@ -40,7 +42,7 @@ public:
         std::array<std::array<std::array<float, num_feature_planes>, data_size>, data_size>;
     StackedFeaturePlanes get_feature_planes(Color to_play);
 
-    static constexpr int num_feature_scalars = 7;
+    static constexpr int num_feature_scalars = 5;
     using FeatureVector = std::array<float, num_feature_scalars>;
     FeatureVector get_feature_scalars(Color to_play);
 

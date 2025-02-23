@@ -51,8 +51,11 @@ uint64_t color_to_zobrist(go_data_gen::Color color) {
 
 namespace go_data_gen {
 
-Board::Board(Vec2 _board_size, float _komi, Ruleset _ruleset)
-    : board_size{_board_size}, komi{_komi}, ruleset{_ruleset} {
+Board::Board(Vec2 _board_size, float _komi, Ruleset _ruleset, int _num_handicap_stones)
+    : board_size{_board_size},
+      komi{_komi},
+      ruleset{_ruleset},
+      num_handicap_stones{_num_handicap_stones} {
     assert(board_size.x <= max_board_size && board_size.y <= max_board_size &&
            "Maximum size exceeded");
     init_zobrist();
@@ -321,8 +324,28 @@ void Board::play(Move move) {
         } else {
             zobrist_history.push_back(zobrist);
         }
-        assert(std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() ==
-               zobrist_history.size());  // Assert no duplicates
+        // Assert no duplicates
+        // assert(ruleset.ko_rule == KoRule::Simple ||
+        //        std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() ==
+        //            zobrist_history.size());
+        if (ruleset.ko_rule != KoRule::Simple &&
+            std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() !=
+                zobrist_history.size()) {
+            printf("Duplicate zobrist hash detected. Zobrist history:\n");
+            for (const auto& z : zobrist_history) {
+                printf("%016lx\n", z);
+            }
+            print();
+            printf("Ruleset:\n");
+            printf("ko_rule: %s\n",
+                   ruleset.ko_rule == KoRule::Simple ? "Simple" : "SituationalSuperko");
+            printf("suicide_rule: %s\n",
+                   ruleset.suicide_rule == SuicideRule::Allowed ? "Allowed" : "Disallowed");
+            printf("scoring_rule: %s\n",
+                   ruleset.scoring_rule == ScoringRule::Territory ? "Territory" : "Area");
+            printf("num_handicap_stones: %d\n", num_handicap_stones);
+            throw std::runtime_error("Duplicate zobrist hash detected");
+        }
     }
 
     history.push_back(move);
@@ -392,7 +415,7 @@ Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
 
 Board::FeatureVector Board::get_feature_scalars(Color to_play) {
     static constexpr int num_features_before_pass_features = 2;
-    static constexpr int num_pass_features = 5;
+    static constexpr int num_pass_features = 3;
     static_assert(num_feature_scalars == num_features_before_pass_features + num_pass_features);
 
     // Zero-initialize.

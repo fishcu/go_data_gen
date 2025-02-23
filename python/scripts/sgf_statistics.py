@@ -29,10 +29,26 @@ def analyze_sgf_rules(file_path: str) -> Dict[str, str]:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        rules = {}
+
         # Find RU[] tag
         rules_match = re.search(r'RU\[[^\]]*\]', content)
         if rules_match:
-            return parse_rules_string(rules_match.group())
+            rules.update(parse_rules_string(rules_match.group()))
+
+        # Find SZ[] tag
+        size_match = re.search(r'SZ\[([^\]]*)\]', content)
+        if size_match:
+            size = size_match.group(1)
+            if ':' in size:  # rectangular board
+                width, height = map(int, size.split(':'))
+                # Ensure larger dimension comes first
+                width, height = max(width, height), min(width, height)
+                rules['sz'] = f"{width}x{height}"
+            else:  # square board
+                rules['sz'] = f"{size}x{size}"  # Convert "19" to "19x19"
+
+        return rules
     except Exception as e:
         print(f"Error processing {file_path}: {str(e)}")
 
@@ -75,7 +91,19 @@ def print_statistics(stats: Dict[str, Dict[str, int]], total_files: int, files_w
     for rule_type, values in sorted(stats.items()):
         print(f"\n{rule_type}:")
         total = sum(values.values())
-        for value, count in sorted(values.items()):
+
+        # Special sorting for 'sz' field using natural sort
+        if rule_type == 'sz':
+            # Convert "WxH" to tuple of integers for sorting
+            sorted_items = sorted(
+                values.items(),
+                key=lambda x: tuple(map(int, x[0].split('x'))),
+                reverse=True
+            )
+        else:
+            sorted_items = sorted(values.items())
+
+        for value, count in sorted_items:
             percentage = (count / files_with_rules) * \
                 100 if files_with_rules > 0 else 0
             print(f"  {value}: {count} ({percentage:.1f}%)")

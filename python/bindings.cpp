@@ -15,6 +15,13 @@ using namespace go_data_gen;
 PYBIND11_MODULE(go_data_gen, m) {
     m.doc() = "Python bindings for go_data_gen C++ library";
 
+#ifndef NDEBUG
+    py::print(
+        "WARNING: go_data_gen has been compiled in debug mode. "
+        "Extended runtime checks and decreased performance.",
+        py::arg("file") = py::module_::import("sys").attr("stderr"));
+#endif
+
     py::enum_<Color>(m, "Color")
         .value("Empty", Empty)
         .value("Black", Black)
