@@ -161,6 +161,7 @@ MoveLegality Board::get_move_legality(Move move) {
     // Figure out liberties and captured groups
     // We need to do it in two passes to avoid simulating a removal of the same group multiple times
     // with even parity, which would cancel out the zobrist hash changes.
+    std::vector<Vec2> neighbors_of_same_color;
     std::set<Vec2> resulting_liberties;
     std::set<Vec2> captures;
     bool connects_to_own_group = false;
@@ -176,6 +177,7 @@ MoveLegality Board::get_move_legality(Move move) {
             root = find(neighbor);
             resulting_liberties.insert(liberties[root.y][root.x].begin(),
                                        liberties[root.y][root.x].end());
+            neighbors_of_same_color.push_back(neighbor);
         } else if (neighbor_color == opp_col) {
             root = find(neighbor);
             if (liberties[root.y][root.x].size() == 1) {
@@ -193,8 +195,12 @@ MoveLegality Board::get_move_legality(Move move) {
             if (ruleset.suicide_rule == SuicideRule::Disallowed || !connects_to_own_group) {
                 return MoveLegality::Suicidal;
             }
-            // If suicidal move is legal, simulate removing group
-            captures.insert(find(mem_coord));
+            // If suicidal move is legal, simulate removing group.
+            // Undo the move directly, since we don't want to modify the board state.
+            new_zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
+            for (const auto& neighbor : neighbors_of_same_color) {
+                captures.insert(find(neighbor));
+            }
         }
     }
 
