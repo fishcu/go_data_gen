@@ -17,9 +17,9 @@
 
 namespace {
 
-// +1 for color to play for situational superko
+// +2 for color to play for situational superko
 static constexpr size_t zobrist_hashes_size =
-    go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 2 + 1;
+    go_data_gen::Board::max_board_size * go_data_gen::Board::max_board_size * 2 + 2;
 uint64_t zobrist_hashes[zobrist_hashes_size];
 
 void init_zobrist() {
@@ -44,7 +44,8 @@ uint64_t mem_coord_color_to_zobrist(go_data_gen::Vec2 mem_coord, go_data_gen::Co
 }
 
 uint64_t color_to_zobrist(go_data_gen::Color color) {
-    return color == go_data_gen::Color::Black ? 0 : zobrist_hashes[zobrist_hashes_size - 1];
+    return color == go_data_gen::Color::Black ? zobrist_hashes[zobrist_hashes_size - 2]
+                                              : zobrist_hashes[zobrist_hashes_size - 1];
 }
 
 }  // namespace
@@ -155,15 +156,8 @@ MoveLegality Board::get_move_legality(Move move) {
 
     const auto opp_col = opposite(move.color);
 
-    if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
-        // Simulate switching color-to-play.
-        new_zobrist ^= color_to_zobrist(move.color);
-        new_zobrist ^= color_to_zobrist(opp_col);
-    }
-
     // Simulate playing stone.
     new_zobrist ^= mem_coord_color_to_zobrist(mem_coord, move.color);
-
     // Figure out liberties and captured groups
     // We need to do it in two passes to avoid simulating a removal of the same group multiple times
     // with even parity, which would cancel out the zobrist hash changes.
@@ -195,12 +189,13 @@ MoveLegality Board::get_move_legality(Move move) {
         // Account for this move stealing last liberty of neighboring group without adding any
         resulting_liberties.erase(mem_coord);
         // If suicide is disallowed or if move would be single-stone suicide, move is illegal.
-        if (resulting_liberties.empty() &&
-            (ruleset.suicide_rule == SuicideRule::Disallowed || !connects_to_own_group)) {
-            return MoveLegality::Suicidal;
+        if (resulting_liberties.empty()) {
+            if (ruleset.suicide_rule == SuicideRule::Disallowed || !connects_to_own_group) {
+                return MoveLegality::Suicidal;
+            }
+            // If suicidal move is legal, simulate removing group
+            captures.insert(find(mem_coord));
         }
-        // If suicidal move is legal, simulate removing group
-        captures.insert(find(mem_coord));
     }
 
     // Calculate zobrist if captured groups are removed
@@ -209,6 +204,11 @@ MoveLegality Board::get_move_legality(Move move) {
             new_zobrist ^=
                 mem_coord_color_to_zobrist(stone, static_cast<Color>(board[stone.y][stone.x]));
         }
+    }
+
+    if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
+        // Simulate switching color-to-play.
+        new_zobrist ^= color_to_zobrist(opp_col);
     }
 
     // Check for ko
@@ -237,6 +237,21 @@ void Board::play(Move move) {
             printf("pass\n");
         } else {
             printf("(%d, %d)\n", move.coord.x, move.coord.y);
+        }
+        printf("Move legality: ");
+        switch (legality) {
+        case MoveLegality::Legal:
+            printf("Legal\n");
+            break;
+        case MoveLegality::NonEmpty:
+            printf("Non-empty\n");
+            break;
+        case MoveLegality::Suicidal:
+            printf("Suicidal\n");
+            break;
+        case MoveLegality::Ko:
+            printf("Ko\n");
+            break;
         }
         print([&move](int mem_x, int mem_y) {
             return !move.is_pass && mem_x == move.coord.x + padding &&
@@ -320,6 +335,7 @@ void Board::play(Move move) {
         }
 
         if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
+            // printf("Zobrist hash without opp_col: %016lx\n", zobrist);
             zobrist_history.push_back(zobrist ^ color_to_zobrist(opp_col));
         } else {
             zobrist_history.push_back(zobrist);
@@ -332,8 +348,9 @@ void Board::play(Move move) {
             std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() !=
                 zobrist_history.size()) {
             printf("Duplicate zobrist hash detected. Zobrist history:\n");
-            for (const auto& z : zobrist_history) {
-                printf("%016lx\n", z);
+            const int start = std::max(0, static_cast<int>(zobrist_history.size()) - 5);
+            for (size_t i = start; i < zobrist_history.size(); ++i) {
+                printf("%016lx\n", zobrist_history[i]);
             }
             print();
             printf("Ruleset:\n");
