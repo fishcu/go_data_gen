@@ -100,8 +100,17 @@ PYBIND11_MODULE(go_data_gen, m) {
             Board board;
             std::vector<Move> moves;
             float result;
-            load_sgf(file_path, board, moves, result);
-            return std::make_tuple(board, moves, result);
+            bool is_valid = load_sgf(file_path, board, moves, result);
+
+            if (!is_valid) {
+                // Return (False, None, None, None) for invalid games
+                return py::make_tuple(false, py::none(), py::none(), py::none());
+            } else {
+                // Return (True, board, moves, result) for valid games
+                return py::make_tuple(true, board, moves, result);
+            }
         },
-        "Load SGF file and return board, moves, and result", py::arg("file_path"));
+        "Load SGF file and return (is_valid, board, moves, result). "
+        "If the game is in encore phase, is_valid will be False and the other values will be None.",
+        py::arg("file_path"));
 }

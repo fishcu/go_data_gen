@@ -19,7 +19,13 @@ int main(int argc, char* argv[]) {
     std::vector<Move> moves;
     float result;
 
-    load_sgf(file_path, board, moves, result);
+    bool is_valid = load_sgf(file_path, board, moves, result);
+
+    if (!is_valid) {
+        printf("Error: The SGF file %s is in a cleanup phase and cannot be processed.\n",
+               file_path.c_str());
+        return 1;
+    }
 
     printf("Board after setup:\n");
     board.print();

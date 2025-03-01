@@ -53,7 +53,7 @@ def analyze_sgf_rules(file_path: str) -> Dict[str, str]:
         if handicap_match:
             handicap = handicap_match.group(1)
             rules['handicap'] = handicap
-        
+
         # Find C[] tags containing "encore"
         comment_matches = re.finditer(r'C\[([^\]]*)\]', content)
         encore_found = False
@@ -69,7 +69,7 @@ def analyze_sgf_rules(file_path: str) -> Dict[str, str]:
                         break
                 if encore_found:
                     break
-        
+
         if not encore_found:
             rules['comment'] = "no encore in comment or no comment"
 
