@@ -10,7 +10,7 @@
 
 namespace go_data_gen {
 
-void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves, float& result) {
+bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves, float& result) {
     std::ifstream file(file_path);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open the file: " + file_path);
@@ -19,6 +19,12 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     std::stringstream buffer;
     buffer << file.rdbuf();
     const std::string content = buffer.str();
+
+    const std::regex encore_regex(R"(beganInEncorePhase=(\d+))");
+    std::smatch encore_match;
+    if (std::regex_search(content, encore_match, encore_regex)) {
+        return false;
+    }
 
     // Extract size
     const std::regex size_regex(R"(SZ\[(\d+)(?::(\d+))?\])");
@@ -31,7 +37,7 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     assert(size_x <= Board::max_board_size && size_y <= Board::max_board_size &&
            "Maximum size exceeded");
 
-    // Extract handicap stones
+    // Extract number of handicap stones
     const std::regex handicap_regex(R"(HA\[(\d+)\])");
     std::smatch handicap_match;
     const bool handicap_found = std::regex_search(content, handicap_match, handicap_regex);
@@ -87,19 +93,15 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
 
     // Parse button (first player pass bonus) rule
     if (rules_str.find("button1") != std::string::npos) {
-        ruleset.first_person_pass_bonus_rule = FirstPersonPassBonusRule::Bonus;
+        ruleset.first_player_pass_bonus_rule = FirstPlayerPassBonusRule::Bonus;
     } else {
-        ruleset.first_person_pass_bonus_rule = FirstPersonPassBonusRule::NoBonus;
+        ruleset.first_player_pass_bonus_rule = FirstPlayerPassBonusRule::NoBonus;
     }
-
-    // Default to no white handicap bonus
-    ruleset.white_handicap_bonus_rule = WhiteHandicapBonusRule::NoBonus;
-
-    board = Board(Vec2{size_x, size_y}, komi, ruleset, num_handicap_stones);
 
     const std::sregex_iterator end;
 
     // Handle setup and handicap moves
+    std::vector<Move> setup_moves;
     const std::regex setup_regex(R"(A([BWE])(\[[a-z]{2}\])+)");
     std::sregex_iterator setup_iter(content.begin(), content.end(), setup_regex);
     const std::regex coord_regex(R"(\[([a-z]{2})\])");
@@ -116,11 +118,11 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             const int y = static_cast<int>(coord_match[1].str()[1] - 'a');
 
             if (setup_type == 'B') {
-                board.setup_move(Move{Black, false, {x, y}});
+                setup_moves.push_back(Move{Black, false, {x, y}});
             } else if (setup_type == 'W') {
-                board.setup_move(Move{White, false, {x, y}});
+                setup_moves.push_back(Move{White, false, {x, y}});
             } else if (setup_type == 'E') {
-                board.setup_move(Move{Empty, false, {x, y}});
+                setup_moves.push_back(Move{Empty, false, {x, y}});
             }
 
             ++coord_iter;
@@ -185,6 +187,60 @@ void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
         const float score = std::stof(result_str.substr(2));
         result = (winner == 'W' ? -1.0f : 1.0f) * score;
     }
+
+    // Set up board and verify that all moves are legal
+    board = Board(Vec2{size_x, size_y}, komi, ruleset, num_handicap_stones);
+    for (const Move& move : setup_moves) {
+        board.setup_move(move);
+    }
+    for (const Move& move : moves) {
+        const auto legality = board.get_move_legality(move);
+        if (legality != MoveLegality::Legal) {
+            printf("Illegal move detected: %s (%d, %d)", move.color == Black ? "Black" : "White",
+                   move.coord.x, move.coord.y);
+            printf("Move legality: ");
+            switch (legality) {
+            case MoveLegality::NonEmpty:
+                printf("Non-empty\n");
+                break;
+            case MoveLegality::Suicidal:
+                printf("Suicidal\n");
+                break;
+            case MoveLegality::Ko:
+                printf("Ko\n");
+                break;
+            default:
+                assert(false && "Invalid move legality");
+            }
+            board.print([&move](int mem_x, int mem_y) {
+                return !move.is_pass && mem_x == move.coord.x + Board::padding &&
+                       mem_y == move.coord.y + Board::padding;
+            });
+            throw std::runtime_error("Illegal move");
+        }
+    }
+
+    board.reset();
+
+    for (const Move& move : setup_moves) {
+        board.setup_move(move);
+    }
+
+    // Extract start turn index
+    const std::regex start_turn_regex(R"(startTurnIdx=(\d+))");
+    std::smatch start_turn_match;
+    const bool start_turn_found = std::regex_search(content, start_turn_match, start_turn_regex);
+    assert(start_turn_found && "Start turn not found in the SGF file");
+    const int start_turn_index = std::stoi(start_turn_match[1]);
+
+    // Treat the first startTurnIdx moves as setup moves that should not be included in the training
+    // data.
+    for (int i = 0; i < start_turn_index; i++) {
+        board.play(moves[i]);
+    }
+    moves.erase(moves.begin(), moves.begin() + start_turn_index);
+
+    return true;
 }
 
 }  // namespace go_data_gen

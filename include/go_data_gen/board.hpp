@@ -22,7 +22,7 @@ public:
     ~Board() = default;
 
     float komi;
-    int num_handicap_stones;  // important for counting in some rulesets
+    int num_handicap_stones;
 
     void reset();
     // Used for handicap and setup moves.
@@ -30,10 +30,12 @@ public:
     // Does not influence (super)ko.
     // Does not get recorded history.
     // Allows for "Empty" moves, meaning it erases stones from the board.
+    // The number of setup stones is tracked in `num_setup_stones`.
     void setup_move(Move move);
 
     Ruleset ruleset;
     MoveLegality get_move_legality(Move move);
+    bool is_legal(Move move);
 
     void play(Move move);
 
@@ -42,7 +44,7 @@ public:
         std::array<std::array<std::array<float, num_feature_planes>, data_size>, data_size>;
     StackedFeaturePlanes get_feature_planes(Color to_play);
 
-    static constexpr int num_feature_scalars = 5;
+    static constexpr int num_feature_scalars = 8;
     using FeatureVector = std::array<float, num_feature_scalars>;
     FeatureVector get_feature_scalars(Color to_play);
 
@@ -62,9 +64,12 @@ private:
     void unite(Vec2 a, Vec2 b);
 
     std::vector<Move> history;
+    Color first_player_to_pass;
+    int num_captures;  // Number of captures by Black minus number of captures by White
+    int num_setup_stones;
+
     uint64_t zobrist;
     std::vector<uint64_t> zobrist_history;
-
     bool any_ko_move(Color to_play);
 };
 

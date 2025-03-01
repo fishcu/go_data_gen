@@ -45,12 +45,12 @@ def main():
                 print(f"Scalar feature {c} = {feature_vector[c]}")
 
     print("Result: ", end="")
-    if result < 0:
-        print(f"B+{-result:.1f}")
-    elif result > 0:
-        print(f"W+{result:.1f}")
+    if result > 0:
+        print(f"B+{result:.1f}")
+    elif result < 0:
+        print(f"W+{-result:.1f}")
     else:
-        print("0")
+        print("Draw or void game")
 
     return 0
 

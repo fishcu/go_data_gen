@@ -60,12 +60,12 @@ int main(int argc, char* argv[]) {
     }
 
     printf("Result: ");
-    if (result < 0) {
-        printf("B+%.1f\n", -result);
-    } else if (result > 0) {
-        printf("W+%.1f\n", result);
+    if (result > 0) {
+        printf("B+%.1f\n", result);
+    } else if (result < 0) {
+        printf("W+%.1f\n", -result);
     } else {
-        printf("0\n");
+        printf("Draw or void game\n");
     }
 
     return 0;

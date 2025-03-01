@@ -7,6 +7,7 @@
 
 namespace go_data_gen {
 
-void load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves, float& result);
+// Return false if the file is in the encore phase, true otherwise
+bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& moves, float& result);
 
 }  // namespace go_data_gen

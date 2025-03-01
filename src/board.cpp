@@ -78,6 +78,10 @@ void Board::reset() {
         }
     }
     history.clear();
+    first_player_to_pass = Empty;
+    num_captures = 0;
+    num_setup_stones = 0;
+
     zobrist = 0;
     if (ruleset.ko_rule == KoRule::Simple || ruleset.ko_rule == KoRule::SituationalSuperko) {
         // On an empty board, black gets to play first.
@@ -94,6 +98,13 @@ void Board::setup_move(Move move) {
     // Shift coordinate to account for padding of data fields.
     const Vec2 mem_coord{move.coord.x + padding, move.coord.y + padding};
 
+    if ((move.color == Black || move.color == White) && board[mem_coord.y][mem_coord.x] == Empty) {
+        ++num_setup_stones;
+    } else if (move.color == Empty && (board[mem_coord.y][mem_coord.x] == Black ||
+                                       board[mem_coord.y][mem_coord.x] == White)) {
+        --num_setup_stones;
+    }
+
     board[mem_coord.y][mem_coord.x] = static_cast<char>(move.color);
 
     if (move.color == Black || move.color == White) {
@@ -106,7 +117,8 @@ void Board::setup_move(Move move) {
 
     Vec2 neighbor, root;
 
-    // Update liberties and connect groups
+    // Update liberties and connect groups.
+    // Captures are not handled.
     Color neighbor_color;
     FOR_EACH_NEIGHBOR(
         mem_coord, neighbor,  //
@@ -227,6 +239,13 @@ MoveLegality Board::get_move_legality(Move move) {
         // Superko: Move would repeat any previous board state.
         if (std::find(zobrist_history.begin(), zobrist_history.end(), new_zobrist) !=
             zobrist_history.end()) {
+            // printf("Duplicate zobrist hash detected. New zobrist: %016lx. Zobrist history:\n",
+            //        new_zobrist);
+            // const int start = std::max(0, static_cast<int>(zobrist_history.size()) - 7);
+            // for (size_t i = start; i < zobrist_history.size(); ++i) {
+            //     printf("%016lx\n", zobrist_history[i]);
+            // }
+            // print();
             return MoveLegality::Ko;
         }
     }
@@ -234,37 +253,10 @@ MoveLegality Board::get_move_legality(Move move) {
     return MoveLegality::Legal;
 }
 
+bool Board::is_legal(Move move) { return get_move_legality(move) == MoveLegality::Legal; }
+
 void Board::play(Move move) {
-    // assert(get_move_legality(move) == Legal);
-    const auto legality = get_move_legality(move);
-    if (legality != MoveLegality::Legal) {
-        printf("Illegal move detected: %s ", move.color == Black ? "Black" : "White");
-        if (move.is_pass) {
-            printf("pass\n");
-        } else {
-            printf("(%d, %d)\n", move.coord.x, move.coord.y);
-        }
-        printf("Move legality: ");
-        switch (legality) {
-        case MoveLegality::Legal:
-            printf("Legal\n");
-            break;
-        case MoveLegality::NonEmpty:
-            printf("Non-empty\n");
-            break;
-        case MoveLegality::Suicidal:
-            printf("Suicidal\n");
-            break;
-        case MoveLegality::Ko:
-            printf("Ko\n");
-            break;
-        }
-        print([&move](int mem_x, int mem_y) {
-            return !move.is_pass && mem_x == move.coord.x + padding &&
-                   mem_y == move.coord.y + padding;
-        });
-        throw std::runtime_error("Illegal move");
-    }
+    assert(get_move_legality(move) == MoveLegality::Legal);
 
     const auto opp_col = opposite(move.color);
     if (!move.is_pass) {
@@ -315,9 +307,14 @@ void Board::play(Move move) {
 
         // Handle captures
         for (auto capture : captures) {
+            const auto removed_color = static_cast<Color>(board[capture.y][capture.x]);
+            const auto opp_rem_col = opposite(removed_color);
+            if (removed_color == Black) {
+                num_captures -= group[capture.y][capture.x].size();
+            } else {
+                num_captures += group[capture.y][capture.x].size();
+            }
             for (auto stone : group[capture.y][capture.x]) {
-                const auto removed_color = static_cast<Color>(board[stone.y][stone.x]);
-                const auto opp_rem_col = opposite(removed_color);
                 zobrist ^= mem_coord_color_to_zobrist(stone, removed_color);
                 board[stone.y][stone.x] = static_cast<char>(Empty);
                 FOR_EACH_NEIGHBOR(
@@ -347,28 +344,36 @@ void Board::play(Move move) {
             zobrist_history.push_back(zobrist);
         }
         // Assert no duplicates
-        // assert(ruleset.ko_rule == KoRule::Simple ||
-        //        std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() ==
-        //            zobrist_history.size());
-        if (ruleset.ko_rule != KoRule::Simple &&
-            std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() !=
-                zobrist_history.size()) {
-            printf("Duplicate zobrist hash detected. Zobrist history:\n");
-            const int start = std::max(0, static_cast<int>(zobrist_history.size()) - 5);
-            for (size_t i = start; i < zobrist_history.size(); ++i) {
-                printf("%016lx\n", zobrist_history[i]);
-            }
-            print();
-            printf("Ruleset:\n");
-            printf("ko_rule: %s\n",
-                   ruleset.ko_rule == KoRule::Simple ? "Simple" : "SituationalSuperko");
-            printf("suicide_rule: %s\n",
-                   ruleset.suicide_rule == SuicideRule::Allowed ? "Allowed" : "Disallowed");
-            printf("scoring_rule: %s\n",
-                   ruleset.scoring_rule == ScoringRule::Territory ? "Territory" : "Area");
-            printf("num_handicap_stones: %d\n", num_handicap_stones);
-            throw std::runtime_error("Duplicate zobrist hash detected");
+        assert(ruleset.ko_rule == KoRule::Simple ||
+               std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() ==
+                   zobrist_history.size());
+        // if (ruleset.ko_rule != KoRule::Simple &&
+        //     std::set<uint64_t>(zobrist_history.begin(), zobrist_history.end()).size() !=
+        //         zobrist_history.size()) {
+        //     printf("Duplicate zobrist hash detected. Zobrist history:\n");
+        //     const int start = std::max(0, static_cast<int>(zobrist_history.size()) - 5);
+        //     for (size_t i = start; i < zobrist_history.size(); ++i) {
+        //         printf("%016lx\n", zobrist_history[i]);
+        //     }
+        //     print();
+        //     printf("Ruleset:\n");
+        //     printf("ko_rule: %s\n",
+        //            ruleset.ko_rule == KoRule::Simple ? "Simple" : "SituationalSuperko");
+        //     printf("suicide_rule: %s\n",
+        //            ruleset.suicide_rule == SuicideRule::Allowed ? "Allowed" : "Disallowed");
+        //     printf("scoring_rule: %s\n",
+        //            ruleset.scoring_rule == ScoringRule::Territory ? "Territory" : "Area");
+        //     throw std::runtime_error("Duplicate zobrist hash detected");
+        // }
+    } else {
+        // The "button" rule says that the first player to pass gets a bonus of 0.5 points.
+        // In addition to that, the "button" is part of the board state, so the zobrist hash is
+        // cleared if the pass is the first of the game.
+        if (ruleset.first_player_pass_bonus_rule == FirstPlayerPassBonusRule::Bonus &&
+            first_player_to_pass == Empty) {
+            zobrist_history.clear();
         }
+        first_player_to_pass = move.color;
     }
 
     history.push_back(move);
@@ -437,18 +442,43 @@ Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
 }
 
 Board::FeatureVector Board::get_feature_scalars(Color to_play) {
-    static constexpr int num_features_before_pass_features = 2;
+    static constexpr int num_features_before_pass_features = 5;
     static constexpr int num_pass_features = 3;
     static_assert(num_feature_scalars == num_features_before_pass_features + num_pass_features);
 
     // Zero-initialize.
     FeatureVector result{};
 
-    // Komi from player perspective. Normalize like KataGo.
-    result[0] = (to_play == White ? komi : -komi) / 15.0;
+    // Extra points that the current player gets.
+    float points_normalization_factor = 1.0f / 15.0f;
+    float bonus = komi;  // From White's perspective
+    if (ruleset.first_player_pass_bonus_rule == FirstPlayerPassBonusRule::Bonus) {
+        if (first_player_to_pass == Black) {
+            bonus -= 0.5f;
+        } else if (first_player_to_pass == White) {
+            bonus += 0.5f;
+        }
+    }
+    result[0] = (to_play == White ? bonus : -bonus) * points_normalization_factor;
 
     // There is a superko move
     result[1] = static_cast<float>(any_ko_move(to_play));
+
+    // Scoring is area-based or territory-based
+    if (ruleset.scoring_rule == ScoringRule::Area) {
+        result[2] = 0.0f;
+    } else if (ruleset.scoring_rule == ScoringRule::Territory) {
+        result[2] = 1.0f;
+    }
+
+    // Stone capture difference from current player's perspective, normalized.
+    // num_captures is positive if black captured more stones than white.
+    result[3] = (to_play == White ? -1.0f : 1.0f) * static_cast<float>(num_captures) *
+                points_normalization_factor;
+
+    // Stage of the game as ratio of moves played over board size
+    result[4] =
+        static_cast<float>(num_setup_stones + history.size()) / (board_size.x * board_size.y);
 
     // N-last move was pass
     for (int dist = 0; dist < num_pass_features; ++dist) {

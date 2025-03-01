@@ -61,6 +61,7 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("reset", &Board::reset)
         .def("setup_move", &Board::setup_move)
         .def("get_move_legality", &Board::get_move_legality)
+        .def("is_legal", &Board::is_legal)
         .def("play", &Board::play)
         .def_readonly_static("num_feature_planes", &Board::num_feature_planes)
         .def("get_feature_planes",

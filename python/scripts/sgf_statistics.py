@@ -24,7 +24,7 @@ def parse_rules_string(rules_str: str) -> Dict[str, str]:
 
 
 def analyze_sgf_rules(file_path: str) -> Dict[str, str]:
-    """Extract rules from an SGF file."""
+    """Extract rules and encore-related comments from an SGF file."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -47,6 +47,31 @@ def analyze_sgf_rules(file_path: str) -> Dict[str, str]:
                 rules['sz'] = f"{width}x{height}"
             else:  # square board
                 rules['sz'] = f"{size}x{size}"  # Convert "19" to "19x19"
+
+        # Find HA[] tag for handicap stones
+        handicap_match = re.search(r'HA\[([^\]]*)\]', content)
+        if handicap_match:
+            handicap = handicap_match.group(1)
+            rules['handicap'] = handicap
+        
+        # Find C[] tags containing "encore"
+        comment_matches = re.finditer(r'C\[([^\]]*)\]', content)
+        encore_found = False
+        for match in comment_matches:
+            comment = match.group(1)
+            if 'encore' in comment.lower():
+                # Split by comma and find the part containing 'encore'
+                parts = comment.split(',')
+                for part in parts:
+                    if 'encore' in part.lower():
+                        rules['comment'] = part.strip()
+                        encore_found = True
+                        break
+                if encore_found:
+                    break
+        
+        if not encore_found:
+            rules['comment'] = "no encore in comment or no comment"
 
         return rules
     except Exception as e:
@@ -100,6 +125,9 @@ def print_statistics(stats: Dict[str, Dict[str, int]], total_files: int, files_w
                 key=lambda x: tuple(map(int, x[0].split('x'))),
                 reverse=True
             )
+        elif rule_type == 'comment':
+            # Sort comments by count in descending order
+            sorted_items = sorted(values.items(), key=lambda x: (-x[1], x[0]))
         else:
             sorted_items = sorted(values.items())
 
