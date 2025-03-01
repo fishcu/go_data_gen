@@ -193,6 +193,7 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     for (const Move& move : setup_moves) {
         board.setup_move(move);
     }
+
     for (const Move& move : moves) {
         const auto legality = board.get_move_legality(move);
         if (legality != MoveLegality::Legal) {
@@ -218,6 +219,7 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             });
             throw std::runtime_error("Illegal move");
         }
+        board.play(move);
     }
 
     board.reset();
