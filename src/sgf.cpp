@@ -20,6 +20,7 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     buffer << file.rdbuf();
     const std::string content = buffer.str();
 
+    // If the game began in an encore phase, skip it
     const std::regex encore_regex(R"(beganInEncorePhase=(\d+))");
     std::smatch encore_match;
     if (std::regex_search(content, encore_match, encore_regex)) {
@@ -98,6 +99,9 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
         ruleset.first_player_pass_bonus_rule = FirstPlayerPassBonusRule::NoBonus;
     }
 
+    // Set up board and verify that all moves are legal
+    board = Board(Vec2{size_x, size_y}, komi, ruleset, num_handicap_stones);
+
     const std::sregex_iterator end;
 
     // Handle setup and handicap moves
@@ -117,13 +121,17 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             const int x = static_cast<int>(coord_match[1].str()[0] - 'a');
             const int y = static_cast<int>(coord_match[1].str()[1] - 'a');
 
+            Color color;
             if (setup_type == 'B') {
-                setup_moves.push_back(Move{Black, false, {x, y}});
+                color = Black;
             } else if (setup_type == 'W') {
-                setup_moves.push_back(Move{White, false, {x, y}});
+                color = White;
             } else if (setup_type == 'E') {
-                setup_moves.push_back(Move{Empty, false, {x, y}});
+                color = Empty;
             }
+            const Move move{color, false, {x, y}};
+            board.setup_move(move);
+            setup_moves.push_back(move);
 
             ++coord_iter;
         }
@@ -154,47 +162,18 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
         }
 
         const Color color = move_match[1].str()[0] == 'B' ? Black : White;
-
+        Vec2 coord;
+        bool is_pass = false;
         if (move_match[2].matched) {
-            const int x = static_cast<int>(move_match[2].str()[0] - 'a');
-            const int y = static_cast<int>(move_match[2].str()[1] - 'a');
-            moves.push_back(Move{color, false, {x, y}});
+            coord = {static_cast<int>(move_match[2].str()[0] - 'a'),
+                     static_cast<int>(move_match[2].str()[1] - 'a')};
             consecutive_passes = 0;
         } else {
-            moves.push_back(Move{color, true, {}});
+            is_pass = true;
             ++consecutive_passes;
         }
+        Move move{color, is_pass, coord};
 
-        ++move_iter;
-    }
-
-    // Extract result
-    const std::regex result_regex(R"(RE\[((?:B|W)\+(?:\d+(?:\.\d+)?|R)?|0|Void)\])");
-    std::smatch result_match;
-    const bool result_found = std::regex_search(content, result_match, result_regex);
-    assert(result_found && "Result not found in the SGF file");
-
-    const std::string result_str = result_match[1].str();
-    if (result_str == "B+R") {
-        result = 1000.0f;  // Black wins by resignation
-    } else if (result_str == "W+R") {
-        result = -1000.0f;  // White wins by resignation
-    } else if (result_str == "0" || result_str == "Void") {
-        result = 0.0f;  // Draw or void game
-    } else {
-        // Parse score for B+<score> or W+<score>
-        const char winner = result_str[0];
-        const float score = std::stof(result_str.substr(2));
-        result = (winner == 'W' ? -1.0f : 1.0f) * score;
-    }
-
-    // Set up board and verify that all moves are legal
-    board = Board(Vec2{size_x, size_y}, komi, ruleset, num_handicap_stones);
-    for (const Move& move : setup_moves) {
-        board.setup_move(move);
-    }
-
-    for (const Move& move : moves) {
         const auto legality = board.get_move_legality(move);
         if (legality != MoveLegality::Legal) {
             printf("Illegal move detected: %s (%d, %d)", move.color == Black ? "Black" : "White",
@@ -220,12 +199,9 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
             throw std::runtime_error("Illegal move");
         }
         board.play(move);
-    }
+        moves.push_back(move);
 
-    board.reset();
-
-    for (const Move& move : setup_moves) {
-        board.setup_move(move);
+        ++move_iter;
     }
 
     // Extract start turn index
@@ -235,12 +211,44 @@ bool load_sgf(const std::string& file_path, Board& board, std::vector<Move>& mov
     assert(start_turn_found && "Start turn not found in the SGF file");
     const int start_turn_index = std::stoi(start_turn_match[1]);
 
+    // If the game only contains high-temperature moves, skip it.
+    if (moves.size() <= start_turn_index) {
+        return false;
+    }
+
+    // Prepare board for training
+    board.reset();
+    for (const Move& move : setup_moves) {
+        board.setup_move(move);
+    }
     // Treat the first startTurnIdx moves as setup moves that should not be included in the training
     // data.
     for (int i = 0; i < start_turn_index; i++) {
         board.play(moves[i]);
     }
+    assert(moves.size() > start_turn_index && "Not enough moves to train");
     moves.erase(moves.begin(), moves.begin() + start_turn_index);
+    assert(moves.size() > 0 && "No moves left to train");
+
+    // Extract result
+    const std::regex result_regex(R"(RE\[((?:B|W)\+(?:\d+(?:\.\d+)?|R)?|0|Void)\])");
+    std::smatch result_match;
+    const bool result_found = std::regex_search(content, result_match, result_regex);
+    assert(result_found && "Result not found in the SGF file");
+
+    const std::string result_str = result_match[1].str();
+    if (result_str == "B+R") {
+        result = 1000.0f;  // Black wins by resignation
+    } else if (result_str == "W+R") {
+        result = -1000.0f;  // White wins by resignation
+    } else if (result_str == "0" || result_str == "Void") {
+        result = 0.0f;  // Draw or void game
+    } else {
+        // Parse score for B+<score> or W+<score>
+        const char winner = result_str[0];
+        const float score = std::stof(result_str.substr(2));
+        result = (winner == 'W' ? -1.0f : 1.0f) * score;
+    }
 
     return true;
 }

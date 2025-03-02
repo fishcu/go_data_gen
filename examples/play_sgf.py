@@ -11,8 +11,7 @@ def main():
     is_valid, board, moves, result = go_data_gen.load_sgf(file_path)
 
     if not is_valid:
-        print(
-            f"Error: The SGF file {file_path} is in a cleanup phase and cannot be processed.")
+        print(f"Error: The SGF file {file_path} is not suitable for training.")
         return 1
 
     print("Board after setup:")
