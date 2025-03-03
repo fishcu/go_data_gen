@@ -373,6 +373,11 @@ void Board::play(Move move) {
             first_player_to_pass == Empty) {
             zobrist_history.clear();
         }
+        // A pass when Ko rule is simple means any board repetition is pushed further than two moves
+        // away, so we can just clear the history.
+        if (ruleset.ko_rule == KoRule::Simple) {
+            zobrist_history.clear();
+        }
         first_player_to_pass = move.color;
     }
 
