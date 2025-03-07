@@ -21,6 +21,7 @@ public:
 
     ~Board() = default;
 
+    Vec2 get_board_size() const { return board_size; }
     float komi;
     int num_handicap_stones;
 

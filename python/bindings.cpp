@@ -57,6 +57,7 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def_readonly_static("data_size", &Board::data_size)
         .def(py::init<>())
         .def(py::init<Vec2, float>())
+        .def("get_board_size", &Board::get_board_size)
         .def_readwrite("komi", &Board::komi)
         .def("reset", &Board::reset)
         .def("setup_move", &Board::setup_move)
