@@ -65,6 +65,8 @@ PYBIND11_MODULE(go_data_gen, m) {
         .def("is_legal", &Board::is_legal)
         .def("play", &Board::play)
         .def_readonly_static("num_feature_planes", &Board::num_feature_planes)
+        .def_readonly_static("legal_move_plane_index", &Board::legal_move_plane_index)
+        .def_readonly_static("on_board_plane_index", &Board::on_board_plane_index)
         .def("get_feature_planes",
              [](Board& self, Color to_play) {
                  auto feature_planes = self.get_feature_planes(to_play);

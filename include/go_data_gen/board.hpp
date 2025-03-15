@@ -41,6 +41,9 @@ public:
     void play(Move move);
 
     static constexpr int num_feature_planes = 18;
+    static constexpr int legal_move_plane_index = 0;
+    static constexpr int on_board_plane_index = 1;
+
     using StackedFeaturePlanes =
         std::array<std::array<std::array<float, num_feature_planes>, data_size>, data_size>;
     StackedFeaturePlanes get_feature_planes(Color to_play);

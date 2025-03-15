@@ -402,13 +402,16 @@ Board::StackedFeaturePlanes Board::get_feature_planes(Color to_play) {
                 get_move_legality(Move{to_play, false, {x - padding, y - padding}});
 
             // Legal to play
-            result[y][x][0] = static_cast<float>(move_legality == MoveLegality::Legal);
-            // Own color
-            result[y][x][1] = static_cast<float>(static_cast<Color>(board[y][x]) == to_play);
-            // Opponent color
-            result[y][x][2] = static_cast<float>(static_cast<Color>(board[y][x]) == opp_col);
+            result[y][x][legal_move_plane_index] =
+                static_cast<float>(move_legality == MoveLegality::Legal);
             // Is on-board
-            result[y][x][3] = static_cast<float>(static_cast<Color>(board[y][x]) != OffBoard);
+            result[y][x][on_board_plane_index] =
+                static_cast<float>(static_cast<Color>(board[y][x]) != OffBoard);
+
+            // Own color
+            result[y][x][2] = static_cast<float>(static_cast<Color>(board[y][x]) == to_play);
+            // Opponent color
+            result[y][x][3] = static_cast<float>(static_cast<Color>(board[y][x]) == opp_col);
 
             // Mark ko / superko
             result[y][x][4] = static_cast<float>(move_legality == MoveLegality::Ko);
